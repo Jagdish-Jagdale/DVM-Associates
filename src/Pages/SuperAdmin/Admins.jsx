@@ -3,6 +3,7 @@ import { ref, onValue, update, remove } from 'firebase/database'
 import { db } from '../../../firebase.js'
 import * as XLSX from 'xlsx'
 import { FiEdit, FiTrash2, FiDownload, FiChevronLeft, FiChevronRight, FiArrowUp, FiArrowDown, FiX } from 'react-icons/fi'
+import PageHeader from '../../Components/UI/PageHeader.jsx'
 
 const Admins = () => {
   const [admins, setAdmins] = useState([])
@@ -173,9 +174,7 @@ const Admins = () => {
 
   return (
     <div className="max-w-[1200px] mx-auto p-4 md:p-6">
-      <div className="mb-2">
-        <h2 className="text-3xl font-bold text-gray-800 text-center">Admins</h2>
-      </div>
+      <PageHeader title="Admins" subtitle="Search, filter, edit and export administrator accounts." />
       <div className="mb-4 w-full">
         <div className="flex flex-wrap items-center gap-3 w-full">
           <input

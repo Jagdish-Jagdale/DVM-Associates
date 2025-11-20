@@ -43,6 +43,7 @@ const Settings = () => {
     const nm = (form.name||'').trim()
     if (!nm) return
     let key = nm.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || String(Date.now())
+    if (rows.some(r => r.key === key)) key = key + '-' + Date.now()
     const value = { name: nm, createdAt: Date.now() }
     await set(ref(db, `settings/${selected}/${key}`), value)
     closeAdd()
@@ -57,7 +58,8 @@ const Settings = () => {
   const current = Math.min(page, totalPages)
   const start = (current - 1) * pageSize
   const pageItems = rows.slice(start, start + pageSize)
-  const colCount = columns.length + 2 // Sr No + Actions
+  const showActions = selected !== 'branches'
+  const colCount = columns.length + 1 + (showActions ? 1 : 0) // Sr No + (optional Actions)
 
   return (
     <div className="min-h-[60vh]">
@@ -95,11 +97,13 @@ const Settings = () => {
           <table className="w-full text-sm border-collapse">
             <thead className="bg-indigo-600 text-white">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold border border-indigo-500">Sr No</th>
+                <th className="px-3 py-2 text-center font-semibold border border-indigo-500">Sr No</th>
                 {columns.map(c => (
-                  <th key={c} className="px-3 py-2 text-left font-semibold border border-indigo-500">{c}</th>
+                  <th key={c} className={`px-3 py-2 font-semibold border border-indigo-500 ${c==='Created' ? 'text-center' : 'text-left'}`}>{c}</th>
                 ))}
-                <th className="px-3 py-2 text-left font-semibold border border-indigo-500">Actions</th>
+                {showActions && (
+                  <th className="px-3 py-2 text-left font-semibold border border-indigo-500">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -107,38 +111,40 @@ const Settings = () => {
                 <tr><td colSpan={colCount} className="px-4 py-4 text-gray-600">Loading...</td></tr>
               ) : pageItems.length ? (
                 pageItems.map((r, i) => (
-                  <tr key={r.key} className={i%2===0? 'bg-white':'bg-gray-50'}>
-                    <td className="px-3 py-2 border border-gray-200 align-top">{start + i + 1}</td>
+                  <tr key={r.key} className={(i%2===0? 'bg-white':'bg-gray-50') + ' transition-colors hover:bg-gray-100'}>
+                    <td className="px-3 py-2 border border-gray-200 align-top text-center">{start + i + 1}</td>
                     <td className="px-3 py-2 border border-gray-200 align-top">
                       <div className="max-w-[260px] whitespace-nowrap overflow-hidden text-ellipsis" title={r.name || '-'}>
                         {r.name || '-'}
                       </div>
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top" title={r.createdAt ? new Date(r.createdAt).toLocaleString() : '-'}>
+                    <td className="px-3 py-2 border border-gray-200 align-top text-center whitespace-nowrap" title={r.createdAt ? new Date(r.createdAt).toLocaleString() : '-'}>
                       {r.createdAt ? new Date(r.createdAt).toLocaleString() : '-'}
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEdit({ open: true, row: r, saving: false })}
-                          className="p-2 rounded-md bg-amber-500 text-white hover:bg-amber-600"
-                          title="Edit"
-                          aria-label="Edit"
-                        >
-                          <FiEdit className="text-base" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirm({ open: true, key: r.key, name: r.name })}
-                          className="p-2 rounded-md bg-red-600 text-white hover:bg-red-700"
-                          title="Delete"
-                          aria-label="Delete"
-                        >
-                          <FiTrash2 className="text-base" />
-                        </button>
-                      </div>
-                    </td>
+                    {showActions && (
+                      <td className="px-3 py-2 border border-gray-200 align-top">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEdit({ open: true, row: r, saving: false })}
+                            className="p-2 rounded-md bg-amber-500 text-white hover:bg-amber-600"
+                            title="Edit"
+                            aria-label="Edit"
+                          >
+                            <FiEdit className="text-base" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirm({ open: true, key: r.key, name: r.name })}
+                            className="p-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+                            title="Delete"
+                            aria-label="Delete"
+                          >
+                            <FiTrash2 className="text-base" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               ) : (
@@ -179,7 +185,7 @@ const Settings = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <form onSubmit={onSave} className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-gray-800">Add {items.find(i=>i.key===selected)?.title.slice(0,-1)}</h3>
+              <h3 className="text-lg font-semibold text-gray-800">Add {selected==='branches' ? 'Branch' : items.find(i=>i.key===selected)?.title.slice(0,-1)}</h3>
               <button type="button" onClick={closeAdd} className="p-1 rounded hover:bg-gray-100" aria-label="Close"><FiX /></button>
             </div>
             <div className="space-y-3">

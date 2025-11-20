@@ -3,6 +3,9 @@ import { ref, set, onValue, get } from 'firebase/database'
 import { db } from '../../../firebase.js'
 import * as XLSX from 'xlsx'
 import { FiSave, FiDownload, FiPlus, FiX} from 'react-icons/fi'
+import PageHeader from '../../Components/UI/PageHeader.jsx'
+import SearchActionsCard from '../../Components/UI/SearchActionsCard.jsx'
+import DatePicker from '../../Components/UI/DatePicker.jsx'
 
 const defaultLocations = [
   { name: 'Sangli', shortForm: 'SNGL', aliases: ['SNGL'] },
@@ -125,15 +128,15 @@ const TableRow = memo(({ record, index, onChangeField, onSaveRow, groupRecords, 
   const renderInput = (field)=>{
     const err = missingFields && typeof missingFields.has==='function' && missingFields.has(field) ? ' border-red-500 ring-1 ring-red-500 bg-red-50' : ''
     if (field==='Action'){
-      const disabled = false
+      const show = !!record.__dirty
+      if (!show) return null
       return (
         <div className="flex items-center gap-2">
           <button
             onClick={()=>onSaveRow(record.globalIndex)}
-            disabled={disabled}
             aria-label="Save"
             title="Save"
-            className={`p-2 rounded-full ${disabled?'bg-gray-200 text-gray-400 cursor-not-allowed':'bg-amber-600 text-white hover:bg-amber-700'}`}
+            className={`p-2 rounded-full bg-amber-600 text-white hover:bg-amber-700`}
           >
             <FiSave className="text-base" />
           </button>
@@ -163,6 +166,24 @@ const TableRow = memo(({ record, index, onChangeField, onSaveRow, groupRecords, 
     if (field==='OfficeNo'){
       const display = (record.Location==='PCMC'?'Pune':record.Location) || ''
       return <input type="text" value={display} readOnly className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`} />
+    }
+    if (field==='ClientContactNo'){
+      const val = String(record[field] ?? '')
+      return (
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]{10}"
+          maxLength={10}
+          onKeyDown={e=>{ if(['e','E','+','-','.',' '].includes(e.key)) e.preventDefault() }}
+          value={val}
+          onChange={e=>{
+            const digits = e.target.value.replace(/\D/g,'').slice(0,10)
+            onChangeField(record.globalIndex, field, digits)
+          }}
+          className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
+        />
+      )
     }
     if (field==='Month'){
       const val = record.Month || ''
@@ -195,8 +216,26 @@ const TableRow = memo(({ record, index, onChangeField, onSaveRow, groupRecords, 
       return <input type="text" value={record[field]||''} onChange={e=>onChangeField(record.globalIndex, field, e.target.value)} className={`w-full p-2 border border-gray-300 rounded text-sm bg-white`} />
     }
     if (field==='Sr'){
+      const isReservedTop = record.globalIndex === -1
+      const showReserved = isReservedTop || !!record.reservedFirst
+      const anyData = [
+        record.Month, record.VisitDate, record.ReportDate, record.TechnicalExecutive,
+        record.Bank, record.Branch, record.ClientName, record.ClientContactNo,
+        record.Locations, record.CaseInitiated, record.Engineer, record.ReportStatus,
+        record.BillStatus, record.ReceivedOn, record.RecdDate, record.GSTNo,
+        record.Remark, record.Amount, record.GST, record.Total,
+        record.SoftCopy, record.Print, record.VisitStatus
+      ].some(v => {
+        if (typeof v === 'boolean') return v
+        if (typeof v === 'number') return v > 0
+        const s = String(v ?? '').trim()
+        if (s === '' || s === '0' || s === '0.0' || s === '0.00') return false
+        return true
+      })
+      const borderCls = showReserved ? (anyData ? 'border-green-500' : 'border-red-500') : ''
+      const titleText = showReserved ? (anyData ? 'Reserved row has data' : 'Reserved row empty') : ''
       return (
-        <div className="relative">
+        <div className={`relative ${borderCls ? 'border-l-[3px] rounded-l ' + borderCls : ''}`} title={titleText}>
           {showDelete && (
             <button
               type="button"
@@ -210,7 +249,7 @@ const TableRow = memo(({ record, index, onChangeField, onSaveRow, groupRecords, 
           )}
           <input
             type="text"
-            value={record[field]||''}
+            value={(index+1).toString()}
             readOnly
             aria-readonly="true"
             tabIndex={-1}
@@ -279,17 +318,67 @@ const Excel = () => {
   const [isSaving,setIsSaving]=useState(false)
   const [selectedLocation,setSelectedLocation]=useState('')
   const [sortBy, setSortBy] = useState('all')
+  const [dateFilter, setDateFilter] = useState('')
   const tableRef = useRef(null)
   const [scrollMaxHeight, setScrollMaxHeight] = useState(0)
-  const yearPair = useMemo(()=>getYearPair(),[])
+  const [serverOffset, setServerOffset] = useState(0)
+  useEffect(() => {
+    const offRef = ref(db, '.info/serverTimeOffset')
+    const unsub = onValue(offRef, (snap) => {
+      const v = typeof snap.val() === 'number' ? snap.val() : Number(snap.val()) || 0
+      setServerOffset(v)
+    }, () => setServerOffset(0))
+    return () => unsub()
+  }, [])
+  const [clock, setClock] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setClock(c => c + 1), 60000)
+    return () => clearInterval(id)
+  }, [])
+  const serverDate = useMemo(() => new Date(Date.now() + serverOffset), [serverOffset, clock])
+  const yearPair = useMemo(()=>getYearPair(serverDate),[serverDate])
+  const displayDate = useMemo(() => {
+    const d = serverDate
+    const dd = String(d.getDate()).padStart(2,'0')
+    const mm = String(d.getMonth()+1).padStart(2,'0')
+    const yyyy = d.getFullYear()
+    return `${dd}-${mm}-${yyyy}`
+  }, [serverDate])
+  const todayYmd = useMemo(() => {
+    const d = serverDate
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth()+1).padStart(2,'0')
+    const dd = String(d.getDate()).padStart(2,'0')
+    return `${yyyy}-${mm}-${dd}`
+  }, [serverDate])
+  const autoDateRef = useRef(true)
+  useEffect(() => { if (autoDateRef.current) setDateFilter(todayYmd) }, [todayYmd])
   const yearPairForRecord = useCallback((rec)=>{
-    return yearPairFromOffice(rec?.OfficeNo) || yearPairFromDate(rec?.VisitDate || rec?.ReportDate) || yearPair
+    return yearPair
   },[yearPair])
+  const [reservedRow, setReservedRow] = useState(null)
   const [confirmState, setConfirmState] = useState({ open: false, scope: '', rowIndex: null })
   const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
   useEffect(()=>{ if(snack.open){ const t=setTimeout(()=>setSnack(s=>({...s,open:false})),2500); return ()=>clearTimeout(t) } },[snack.open])
 
   const allowedLocations = useMemo(() => defaultLocations, [])
+
+  // Load or initialize reserved row for selected branch and date
+  useEffect(() => {
+    if (!selectedLocation || !dateFilter) { setReservedRow(null); return }
+    const loc = selectedLocation === 'PCMC' ? 'Pune' : selectedLocation
+    const path = `reserved_rows/${dateFilter}/${loc}`
+    const u = onValue(ref(db, path), (snap) => {
+      const data = snap.val()
+      if (data) {
+        setReservedRow(recomputeTotals({ ...data, Location: loc, Sr: '1', globalIndex: -1, committedRefNo: data.committedRefNo }))
+      } else {
+        const officeNo = `DVM/${shortOf(loc)}/${yearPair}`
+        setReservedRow(recomputeTotals({ Sr: '1', globalSr:'', OfficeNo: officeNo, RefNo:'', Month:'', VisitDate:'', ReportDate:'', TechnicalExecutive:'', Bank:'', Branch:'', ClientName:'', ClientContactNo:'', Locations:'', Location: loc, CaseInitiated:'', Engineer:'', VisitStatus:false, ReportStatus:'', SoftCopy:false, Print:false, Amount:'', GST:0, BillStatus:'', ReceivedOn:'', RecdDate:'', GSTNo:'', Remark:'', createdAt: dateFilter, globalIndex: -1, committedRefNo: '' }))
+      }
+    }, () => setReservedRow(null))
+    return () => { try { u() } catch {} }
+  }, [selectedLocation, dateFilter, yearPair])
 
   const recomputeTotals = (rec)=>{
     const amount = Math.max(0, Number(rec.Amount)||0)
@@ -325,6 +414,8 @@ const Excel = () => {
   const getMissingFields = useCallback((rec) => {
     const set = new Set()
     requiredFields.forEach(f => { if (String(rec[f] ?? '').trim() === '') set.add(f) })
+    const digits = String(rec.ClientContactNo ?? '').replace(/\D/g,'')
+    if (digits.length !== 10) set.add('ClientContactNo')
     return set
   }, [requiredFields])
   const [validationMap, setValidationMap] = useState({})
@@ -356,7 +447,8 @@ const Excel = () => {
           Location: location, CaseInitiated: data[k].CaseInitiated||'', Engineer: data[k].Engineer||'', VisitStatus: !!data[k].VisitStatus,
           ReportStatus: data[k].ReportStatus||'', SoftCopy: !!data[k].SoftCopy, Print: !!data[k].Print,
           Amount: Math.max(0, Number(data[k].Amount)||0), GST: Number(data[k].GST)||0, BillStatus: data[k].BillStatus||'',
-          ReceivedOn: data[k].ReceivedOn||'', RecdDate: data[k].RecdDate||'', GSTNo: data[k].GSTNo||'', Remark: data[k].Remark||''
+          ReceivedOn: data[k].ReceivedOn||'', RecdDate: data[k].RecdDate||'', GSTNo: data[k].GSTNo||'', Remark: data[k].Remark||'',
+          createdAt: data[k].createdAt || '', reservedFirst: !!data[k].reservedFirst
         }
         out.push(recomputeTotals(base))
       })
@@ -384,9 +476,15 @@ const Excel = () => {
     const re = new RegExp(`-(${yp})-(\\d{3})$`)
     keys.forEach(k=>{ const m=k.match(re); if(m){ used.add(parseInt(m[2],10)) } })
     records.forEach(r=>{ const y = yearPairForRecord(r); if(y===yp){ const n=parseInt(r.RefNo,10); if(!isNaN(n)) used.add(n) } })
+    // also consider reserved committed ref for selected date as used for its year pair
+    const reservedYP = dateFilter ? yearPairFromDate(dateFilter) : ''
+    if (reservedRow?.committedRefNo && reservedYP === yp) {
+      const n = parseInt(reservedRow.committedRefNo, 10)
+      if (!isNaN(n)) used.add(n)
+    }
     let n=1; while(used.has(n)) n++
     return n.toString().padStart(3,'0')
-  },[records, yearPairForRecord])
+  },[records, yearPairForRecord, reservedRow, dateFilter])
 
   const assignRefNoImmediate = useCallback(async(gi, yp)=>{
     try{
@@ -402,6 +500,28 @@ const Excel = () => {
       })
     }catch(e){ console.error('assignRefNoImmediate failed', e) }
   },[getNextRefNoForYP, isRecordComplete, yearPairForRecord])
+
+  const onChangeReservedField = useCallback((gi, field, value) => {
+    setReservedRow(prev => {
+      if (!prev) return prev
+      let rec = { ...prev }
+      if(field==='Amount'){
+        if(value===''){ rec.Amount='' }
+        else {
+          const n = Number(value)
+          rec.Amount = isNaN(n) ? '' : Math.max(0, n)
+        }
+      }
+      else if(field==='GST') rec.GST = value===''? '': Number(value)
+      else rec[field] = value
+      rec = recomputeTotals(rec)
+      // keep OfficeNo consistent with branch and year pair
+      const locName = rec.Location === 'PCMC' ? 'Pune' : rec.Location
+      const yp = yearPair
+      rec.OfficeNo = `DVM/${shortOf(locName)}/${yp}`
+      return { ...rec, __dirty: true }
+    })
+  }, [yearPair])
 
   const onChangeField = useCallback((gi,field,value)=>{
     let assignInfo = null
@@ -420,6 +540,7 @@ const Excel = () => {
       else if(field==='GST') rec.GST = value===''? '': Number(value)
       else rec[field]=value
       rec = recomputeTotals(rec)
+      rec = { ...rec, __dirty: true }
       next[gi]=rec
       const miss = getMissingFields(rec)
       validationUpdate = { gi, fields: Array.from(miss) }
@@ -446,12 +567,138 @@ const Excel = () => {
     const OfficeNo = `DVM/${shortOf(actual)}/${yearPair}`
     setRecords(prev=>{
       const sr = Math.max(0,...prev.filter(r=>r.Location===actual).map(r=>parseInt(r.Sr)||0))+1
-      const newRec = recomputeTotals({ Sr: sr.toString(), globalSr:'', OfficeNo, RefNo: '', Month:'', VisitDate:'', ReportDate:'', TechnicalExecutive:'', Bank:'', Branch:'', ClientName:'', ClientContactNo:'', Locations:'', Location: actual, CaseInitiated:'', Engineer:'', VisitStatus:false, ReportStatus:'', SoftCopy:false, Print:false, Amount:'', GST:0, BillStatus:'', ReceivedOn:'', RecdDate:'', GSTNo:'', Remark:'' })
+      const newRec = recomputeTotals({ Sr: sr.toString(), globalSr:'', OfficeNo, RefNo: '', Month:'', VisitDate:'', ReportDate:'', TechnicalExecutive:'', Bank:'', Branch:'', ClientName:'', ClientContactNo:'', Locations:'', Location: actual, CaseInitiated:'', Engineer:'', VisitStatus:false, ReportStatus:'', SoftCopy:false, Print:false, Amount:'', GST:0, BillStatus:'', ReceivedOn:'', RecdDate:'', GSTNo:'', Remark:'', createdAt: dateFilter || serverDate.toISOString(), __dirty: false })
       const merged=[...prev,newRec].sort((a,b)=> a.Location.localeCompare(b.Location)||parseInt(a.Sr)-parseInt(b.Sr)).map((r,i)=>({...r,globalIndex:i}))
       return merged
     })
     setTimeout(()=>{ if(tableRef.current){ const last = tableRef.current.querySelector('tr:last-child'); last && last.scrollIntoView({behavior:'smooth',block:'center'})}},100)
-  },[yearPair])
+  },[yearPair, dateFilter])
+
+  const saveReservedRow = useCallback(async()=>{
+    if (!selectedLocation || !dateFilter || !reservedRow) return
+    const loc = selectedLocation === 'PCMC' ? 'Pune' : selectedLocation
+    const ypForDate = yearPairFromDate(dateFilter) || yearPair
+    const officeNo = `DVM/${shortOf(loc)}/${ypForDate}`
+    // If already committed, update the existing excel_records entry
+    if (reservedRow.committedRefNo) {
+      const refNo = reservedRow.committedRefNo
+      const key = `DVM-${shortOf(loc)}-${ypForDate}-${refNo}`
+      const excelRec = {
+        ...reservedRow,
+        Sr: '1',
+        RefNo: refNo,
+        OfficeNo: officeNo,
+        Location: loc,
+        createdAt: dateFilter,
+        reservedFirst: true,
+        VisitStatus: !!reservedRow.VisitStatus,
+        SoftCopy: !!reservedRow.SoftCopy,
+        Print: !!reservedRow.Print,
+      }
+      await set(ref(db, `excel_records/${key}`), excelRec)
+      const payload = { ...reservedRow, Sr: '1', RefNo: '', OfficeNo: officeNo, Location: loc, createdAt: dateFilter, committedRefNo: refNo }
+      await set(ref(db, `reserved_rows/${dateFilter}/${loc}`), payload)
+      setReservedRow(prev => prev ? ({ ...prev, __dirty: false }) : prev)
+      return
+    }
+    // assign next available Ref No for this year-pair
+    const nextNo = await getNextRefNoForYP(ypForDate)
+    const excelRec = {
+      ...reservedRow,
+      Sr: '1',
+      RefNo: nextNo,
+      OfficeNo: officeNo,
+      Location: loc,
+      createdAt: dateFilter,
+      reservedFirst: true,
+      VisitStatus: !!reservedRow.VisitStatus,
+      SoftCopy: !!reservedRow.SoftCopy,
+      Print: !!reservedRow.Print,
+    }
+    const key = `DVM-${shortOf(loc)}-${ypForDate}-${nextNo}`
+    await set(ref(db, `excel_records/${key}`), excelRec)
+    // persist reserved row with committedRefNo marker
+    const payload = {
+      ...reservedRow,
+      Sr: '1',
+      RefNo: '',
+      OfficeNo: officeNo,
+      Location: loc,
+      createdAt: dateFilter,
+      committedRefNo: nextNo,
+    }
+    await set(ref(db, `reserved_rows/${dateFilter}/${loc}`), payload)
+    setReservedRow(prev => prev ? { ...prev, committedRefNo: nextNo, __dirty: false } : prev)
+  }, [reservedRow, selectedLocation, dateFilter, yearPair, getNextRefNoForYP])
+
+  // Finalize previous day's uncommitted reserved rows at (or after) midnight
+  const finalizeUncommittedReservedRowsForDate = useCallback(async(dateIso)=>{
+    if (!dateIso) return
+    try{
+      // Build used ref numbers by YearPair from existing excel_records
+      const snap = await get(ref(db,'excel_records'))
+      const keys = Object.keys(snap.val()||{})
+      const usedByYP = new Map()
+      keys.forEach(k=>{
+        const m = k.match(/^DVM-[A-Z]{3,5}-(\d{2}-\d{2})-(\d{3})$/)
+        if(!m) return
+        const yp = m[1]; const n = parseInt(m[2],10)
+        if(!usedByYP.has(yp)) usedByYP.set(yp,new Set())
+        usedByYP.get(yp).add(n)
+      })
+
+      const ypForDate = yearPairFromDate(dateIso) || yearPair
+      const ensureNextForYP = ()=>{
+        const s = usedByYP.get(ypForDate) || new Set()
+        let n = 1
+        while(s.has(n)) n++
+        s.add(n)
+        usedByYP.set(ypForDate, s)
+        return n.toString().padStart(3,'0')
+      }
+
+      for (const locObj of allowedLocations){
+        const loc = locObj.name === 'PCMC' ? 'Pune' : locObj.name
+        const rPath = `reserved_rows/${dateIso}/${loc}`
+        const rSnap = await get(ref(db, rPath))
+        const rVal = rSnap.val()
+        if (!rVal || rVal.committedRefNo) continue
+        // Assign next number and write a blank reserved-first excel record
+        const nextNo = ensureNextForYP()
+        const officeNo = `DVM/${shortOf(loc)}/${ypForDate}`
+        const blank = {
+          Sr: '1',
+          RefNo: nextNo,
+          OfficeNo: officeNo,
+          Month:'', VisitDate:'', ReportDate:'',
+          TechnicalExecutive:'', Bank:'', Branch:'',
+          ClientName:'', ClientContactNo:'', Locations:'',
+          Location: loc, CaseInitiated:'', Engineer:'', VisitStatus:false,
+          ReportStatus:'', SoftCopy:false, Print:false,
+          Amount: 0, GST: 0, BillStatus:'', ReceivedOn:'', RecdDate:'',
+          GSTNo:'', Remark:'',
+          createdAt: dateIso,
+          reservedFirst: true,
+        }
+        const key = `DVM-${shortOf(loc)}-${ypForDate}-${nextNo}`
+        await set(ref(db, `excel_records/${key}`), blank)
+        // Mark reserved row as committed with this number
+        await set(ref(db, rPath), { ...rVal, committedRefNo: nextNo })
+      }
+    }catch(e){ console.error('finalizeUncommittedReservedRowsForDate failed', e) }
+  }, [allowedLocations, yearPair])
+
+  // Trigger finalization when the day rolls over (and also on initial mount)
+  useEffect(() => {
+    try {
+      const d = new Date(serverDate)
+      d.setDate(d.getDate() - 1)
+      const yyyy = d.getFullYear(); const mm = String(d.getMonth()+1).padStart(2,'0'); const dd = String(d.getDate()).padStart(2,'0')
+      const yIso = `${yyyy}-${mm}-${dd}`
+      finalizeUncommittedReservedRowsForDate(yIso)
+    } catch(e) { console.error(e) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayYmd])
 
   const saveRecords = useCallback(async(recs)=>{
     const complete = recs.filter(isRecordComplete)
@@ -475,6 +722,15 @@ const Excel = () => {
         usedByYP.get(yp).add(n)
       }
     })
+    // include reserved row's committed number so normal rows skip it
+    if (reservedRow?.committedRefNo) {
+      const ypR = dateFilter ? yearPairFromDate(dateFilter) : yearPair
+      const n = parseInt(reservedRow.committedRefNo, 10)
+      if (!isNaN(n)) {
+        if (!usedByYP.has(ypR)) usedByYP.set(ypR, new Set())
+        usedByYP.get(ypR).add(n)
+      }
+    }
 
     const assignedInBatch = new Map()
     const enriched = complete.map(r=>{
@@ -492,7 +748,7 @@ const Excel = () => {
       const officeNo = `DVM/${shortOf(loc)}/${yp}`
       const amt = Math.max(0, Number(r.Amount)||0)
       const gst = Number((amt * 0.18).toFixed(2))
-      return { ...r, RefNo: refNoStr, OfficeNo: officeNo, Amount: amt, GST: gst, Total: (amt+gst).toFixed(2), Location: loc }
+      return { ...r, RefNo: refNoStr, OfficeNo: officeNo, Amount: amt, GST: gst, Total: (amt+gst).toFixed(2), Location: loc, createdAt: r.createdAt || serverDate.toISOString() }
     })
 
     const updateMap = new Map()
@@ -513,6 +769,9 @@ const Excel = () => {
         Print: !!r.Print,
       })
     }))
+    // clear dirty flags for saved rows
+    const savedIdx = new Set(complete.map(c=> c.globalIndex))
+    setRecords(prev=> prev.map(p=> savedIdx.has(p.globalIndex) ? ({ ...p, __dirty: false }) : p))
   },[yearPairForRecord, records, isRecordComplete])
 
   const doSave = useCallback(async(recList)=>{
@@ -547,13 +806,38 @@ const Excel = () => {
   const filtered = useMemo(()=> {
     const base = records.filter(r=> !selectedLocation || r.Location===selectedLocation)
     let arr = base.slice()
+    if (dateFilter){
+      arr = arr.filter(r => {
+        const s1 = String(r.ReportDate || r.VisitDate || '').trim()
+        const iso1 = /^\d{4}-\d{2}-\d{2}$/.test(s1) ? s1 : (function(){ const m = s1.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/); if(!m) return ''; const dd=m[1].padStart(2,'0'); const mm=m[2].padStart(2,'0'); let yy=m[3]; if(yy.length===2) yy=(2000+parseInt(yy,10)).toString(); return `${yy}-${mm}-${dd}` })()
+        const s2 = String(r.createdAt || '').trim()
+        const iso2 = /^\d{4}-\d{2}-\d{2}$/.test(s2) ? s2 : (function(){ if(!s2) return ''; const d=new Date(s2); if(isNaN(d.getTime())) return ''; const yyyy=d.getFullYear(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${yyyy}-${mm}-${dd}` })()
+        if(iso2) return iso2===dateFilter
+        if(iso1) return iso1===dateFilter
+        return false
+      })
+    }
     if (sortBy==='pending' || sortBy==='credit'){
       const target = sortBy==='pending' ? 'pending' : 'credit'
       arr = arr.filter(r => String(r.BillStatus||'').toLowerCase() === target)
     }
     arr.sort((a,b)=> a.Location.localeCompare(b.Location) || (parseInt(a.RefNo,10) - parseInt(b.RefNo,10)))
-    return arr.map((r,i)=>({...r,globalIndex:i}))
-  },[records,selectedLocation,sortBy])
+    return arr
+  },[records,selectedLocation,sortBy,dateFilter])
+
+  const displayRows = useMemo(()=>{
+    if (!selectedLocation || !dateFilter) return filtered
+    // filter out the committed reserved record to avoid duplicate when showing reserved row at top
+    const filteredNoDup = reservedRow?.committedRefNo
+      ? filtered.filter(r => parseInt(r.RefNo,10) !== parseInt(reservedRow.committedRefNo,10))
+      : filtered
+    const row = reservedRow || (function(){
+      const actual = selectedLocation === 'PCMC' ? 'Pune' : selectedLocation
+      const officeNo = `DVM/${shortOf(actual)}/${yearPair}`
+      return recomputeTotals({ Sr: '1', globalSr:'', OfficeNo: officeNo, RefNo: '', Month:'', VisitDate:'', ReportDate:'', TechnicalExecutive:'', Bank:'', Branch:'', ClientName:'', ClientContactNo:'', Locations:'', Location: actual, CaseInitiated:'', Engineer:'', VisitStatus:false, ReportStatus:'', SoftCopy:false, Print:false, Amount:'', GST:0, BillStatus:'', ReceivedOn:'', RecdDate:'', GSTNo:'', Remark:'', createdAt: dateFilter, globalIndex: -1 })
+    })()
+    return [row, ...filteredNoDup]
+  }, [filtered, selectedLocation, dateFilter, reservedRow, yearPair])
 
   useEffect(()=>{
     const update = ()=>{
@@ -568,7 +852,7 @@ const Excel = () => {
     update()
     window.addEventListener('resize', update)
     return ()=> window.removeEventListener('resize', update)
-  },[filtered.length])
+  },[selectedLocation ? displayRows.length : filtered.length])
 
   const groups = useMemo(()=>{
     if(!filtered.length) return []
@@ -580,36 +864,75 @@ const Excel = () => {
     return Array.from(map.entries()).sort((a,b)=> a[0].localeCompare(b[0])).map(([location,records])=>({location,records}))
   },[filtered,selectedLocation,allowedLocations.length])
 
-  const downloadFor = useCallback((loc)=>{
-    const locRecs = records.filter(r=> loc==='All' ? true : r.Location===loc).sort((a,b)=> parseInt(a.RefNo)-parseInt(b.RefNo))
-    const data = locRecs.map((r,i)=>({
-      Sr: loc==='All'? (i+1).toString(): r.Sr,
+  const downloadFor = useCallback((_loc)=>{
+    const list = [...filtered].sort((a,b)=> parseInt(a.RefNo,10)-parseInt(b.RefNo,10))
+    const data = list.map((r,i)=>({
+      Sr: selectedLocation ? r.Sr : (i+1).toString(),
       Month:r.Month, Office:(r.Location==='PCMC'?'Pune':r.Location), 'Ref No': formatRefDisplay(r), 'Visit Date': r.VisitDate||'', 'Report Date': r.ReportDate||'', 'Technical Executive': r.TechnicalExecutive||'', Bank:r.Bank, Branch:r.Branch, 'Client Name': r.ClientName, 'Client Contact No': r.ClientContactNo, Locations: r.Locations||'', 'Case Initiated': r.CaseInitiated||'', Engineer:r.Engineer||'', 'Visit Status': r.VisitStatus?'TRUE':'FALSE', 'Report Status': r.ReportStatus, 'Soft Copy': r.SoftCopy?'TRUE':'FALSE', Print: r.Print?'TRUE':'FALSE', Amount: Number(r.Amount)||0, GST: Number(r.GST)||0, Total: (Number(r.Amount)+Number(r.GST)).toFixed(2), 'Bill Status': r.BillStatus||'', 'Received On': r.ReceivedOn, 'Recd Date': r.RecdDate, 'GST No': r.GSTNo||'', Remark: r.Remark, Action:''
     }))
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Bank Visits');
-    XLSX.writeFile(wb, `Excel_Records_${loc}.xlsx`)
-  },[records])
+    XLSX.writeFile(wb, `Excel_Records_${selectedLocation || 'All'}.xlsx`)
+  },[filtered, selectedLocation, formatRefDisplay])
 
   return (
     <div className="max-w-[1400px] mx-auto p-4 md:p-6 ">
-      <div className="w-full flex justify-end mb-6 md:mb-8">
-        <div className="flex items-center gap-2 text-base md:text-base text-gray-700 whitespace-nowrap border border-gray-300 rounded-full px-4 py-1.5 bg-white">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" aria-hidden="true"></span>
-          <span className="font-bold">Branch:</span> <span className="text-indigo-700">{selectedLocation || 'All'}</span>
+      <div className="flex items-start justify-between mb-6 md:mb-8">
+        <div className="flex-1 min-w-0">
+          <PageHeader title="Excel Sheets" subtitle="Search, filter, add and export bank visit records." />
+        </div>
+        <div className="ml-4">
+          <div className="flex items-center gap-2 text-base md:text-base text-gray-700 whitespace-nowrap border border-gray-300 rounded-full px-4 py-1.5 bg-white">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" aria-hidden="true"></span>
+            <span className="font-bold">Branch:</span> <span className="text-indigo-700">{selectedLocation || 'All'}</span>
+          </div>
         </div>
       </div>
-      <h1 className="text-4xl font-bold text-gray-800 text-center mb-4">Excel Sheets</h1>
       {isLoading && <p className="text-center text-gray-600">Loading data from Firebase...</p>}
       {!isLoading && (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xl font-bold text-gray-800">{selectedLocation ? `${selectedLocation} (${filtered.length} records)` : `${filtered.length} records`}</h3>
-            <div className="flex items-center gap-2">
+          <SearchActionsCard
+            title="Search & Actions"
+            recordsCount={filtered.length}
+            contentClassName="flex flex-wrap items-end gap-3"
+            rightPrimary={
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title="Download"
+                  aria-label="Download"
+                  onClick={()=>downloadFor(selectedLocation || 'All')}
+                  className="px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  <span className="hidden sm:inline">Download</span>
+                  <FiDownload className="sm:hidden" />
+                </button>
+                <button
+                  type="button"
+                  title="Add Data"
+                  onClick={()=>handleAddRecord(selectedLocation)}
+                  disabled={!selectedLocation || dateFilter !== todayYmd}
+                  className={`px-3 py-2 rounded-md text-sm flex items-center gap-2 ${(!selectedLocation || dateFilter !== todayYmd) ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                >
+                  <FiPlus />
+                  <span className="hidden sm:inline">Add Data</span>
+                </button>
+              </div>
+            }
+          >
+            <div className="w-full sm:w-auto sm:min-w-[224px]">
+              <DatePicker
+                value={dateFilter}
+                onChange={(val)=>{ setDateFilter(val); autoDateRef.current=false }}
+                onClear={()=>{ setDateFilter(''); autoDateRef.current=false }}
+                label="Filter by Date"
+              />
+            </div>
+            <div className="w-full sm:w-auto">
               <select
                 value={selectedLocation}
                 onChange={(e)=> setSelectedLocation(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm bg-white"
+                className="w-full md:w-auto min-w-[180px] border border-gray-300 rounded px-3 py-2 text-sm bg-white"
                 title="Filter by Branch"
                 aria-label="Filter by Branch"
               >
@@ -618,38 +941,15 @@ const Excel = () => {
                   <option key={l.name} value={l.name}>{l.name}</option>
                 ))}
               </select>
-              <select
-                value={sortBy}
-                onChange={(e)=>setSortBy(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm bg-white"
-                title="Filter by Bill Status"
-                aria-label="Filter by Bill Status"
-              >
-                <option value="all">All</option>
-                <option value="pending">Pending</option>
-                <option value="credit">Credit</option>
-              </select>
-              <button
-                type="button"
-                title="Download"
-                aria-label="Download"
-                onClick={()=>downloadFor(selectedLocation || 'All')}
-                className="p-3 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
-              >
-                <FiDownload className="text-xl" />
-              </button>
-              <button
-                type="button"
-                title="Add Data"
-                onClick={()=>handleAddRecord(selectedLocation)}
-                disabled={!selectedLocation}
-                className={`px-4 py-2.5 rounded-md text-base flex items-center gap-2 ${!selectedLocation ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
-              >
-                <FiPlus className="text-xl" />
-                <span className="hidden sm:inline">Add Data</span>
-              </button>
             </div>
-          </div>
+            <div className="justify-self-start self-end">
+              <div className="inline-flex rounded-md overflow-hidden border border-gray-300 bg-white" role="group" aria-label="Filter by Bill Status">
+                <button type="button" onClick={()=>setSortBy('all')} className={`px-3 py-2 text-sm border-r ${sortBy==='all'?'bg-indigo-50 text-indigo-700':'text-gray-700 hover:bg-gray-50'}`}>All</button>
+                <button type="button" onClick={()=>setSortBy('pending')} className={`px-3 py-2 text-sm border-r ${sortBy==='pending'?'bg-indigo-50 text-indigo-700':'text-gray-700 hover:bg-gray-50'}`}>Pending</button>
+                <button type="button" onClick={()=>setSortBy('credit')} className={`px-3 py-2 text-sm ${sortBy==='credit'?'bg-indigo-50 text-indigo-700':'text-gray-700 hover:bg-gray-50'}`}>Credit</button>
+              </div>
+            </div>
+          </SearchActionsCard>
 
           <div className="overflow-x-auto overflow-y-auto bg-white rounded-lg border border-gray-200 shadow-sm" ref={tableRef} style={{ maxHeight: scrollMaxHeight ? `${scrollMaxHeight}px` : undefined }}>
             <table className="w-full border-collapse text-sm">
@@ -690,51 +990,81 @@ const Excel = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length ? (
-                  groups.map((g, gi)=> (
-                    <React.Fragment key={`grp-${gi}`}>
-                      {g.records.length ? (
-                        g.records.map((rec,idx)=> {
-                          const showDelete = isBlankForDelete(rec)
-                          return (
-                            <TableRow
-                              key={`row-${rec.globalIndex}`}
-                              record={rec}
-                              index={idx}
-                              onChangeField={onChangeField}
-                              onSaveRow={handleSaveRow}
-                              groupRecords={g.records}
-                              dropdownOptions={uiOptions}
-                              formatRef={formatRefDisplay}
-                              missingFields={new Set(validationMap[rec.globalIndex] || [])}
-                              showDelete={showDelete}
-                              onDeleteRow={(officeNo, sr)=>{
-                                setRecords(prev=> prev.filter(r=> !(r.OfficeNo===officeNo && String(r.Sr)===String(sr))))
-                              }}
-                            />
-                          )
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={headers.length} className="px-4 py-6 text-center text-gray-600">
-                            No records
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))
+                {selectedLocation ? (
+                  displayRows.length ? displayRows.map((rec, idx) => {
+                    const isReserved = rec.globalIndex === -1
+                    const showDelete = isReserved ? false : isBlankForDelete(rec)
+                    return (
+                      <TableRow
+                        key={`row-${idx}-${rec.globalIndex}`}
+                        record={rec}
+                        index={idx}
+                        onChangeField={isReserved ? onChangeReservedField : onChangeField}
+                        onSaveRow={handleSaveRow}
+                        groupRecords={displayRows}
+                        dropdownOptions={uiOptions}
+                        formatRef={formatRefDisplay}
+                        missingFields={new Set(validationMap[rec.globalIndex] || [])}
+                        showDelete={showDelete}
+                        onDeleteRow={(officeNo, sr)=>{
+                          setRecords(prev=> prev.filter(r=> !(r.OfficeNo===officeNo && String(r.Sr)===String(sr))))
+                        }}
+                      />
+                    )
+                  }) : (
+                    <tr>
+                      <td colSpan={headers.length} className="px-4 py-6 text-center text-gray-600">No records found{selectedLocation?` for ${selectedLocation}`:''}.</td>
+                    </tr>
+                  )
                 ) : (
-                  <tr>
-                    <td colSpan={headers.length} className="px-4 py-6 text-center text-gray-600">
-                      No records found{selectedLocation ? ` for ${selectedLocation}` : ''}.
-                    </td>
-                  </tr>
+                  filtered.length ? (
+                    groups.map((g, gi)=> (
+                      <React.Fragment key={`grp-${gi}`}>
+                        {g.records.length ? (
+                          g.records.map((rec,idx)=> {
+                            const showDelete = isBlankForDelete(rec)
+                            return (
+                              <TableRow
+                                key={`row-${rec.globalIndex}`}
+                                record={rec}
+                                index={idx}
+                                onChangeField={onChangeField}
+                                onSaveRow={handleSaveRow}
+                                groupRecords={g.records}
+                                dropdownOptions={uiOptions}
+                                formatRef={formatRefDisplay}
+                                missingFields={new Set(validationMap[rec.globalIndex] || [])}
+                                showDelete={showDelete}
+                                onDeleteRow={(officeNo, sr)=>{
+                                  setRecords(prev=> prev.filter(r=> !(r.OfficeNo===officeNo && String(r.Sr)===String(sr))))
+                                }}
+                              />
+                            )
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={headers.length} className="px-4 py-6 text-center text-gray-600">
+                              No records
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={headers.length} className="px-4 py-6 text-center text-gray-600">
+                        No records found{selectedLocation ? ` for ${selectedLocation}` : ''}.
+                      </td>
+                    </tr>
+                  )
                 )}
               </tbody>
             </table>
-            <div className="text-center p-2">
-              <button onClick={handleSaveAll} disabled={isSaving||isLoading} className={`px-4 py-2 rounded-md text-sm ${isSaving||isLoading?'bg-gray-300 text-gray-600 cursor-not-allowed':'bg-amber-600 text-white hover:bg-amber-700'}`}>{isSaving?'Saving...':'Save All'}</button>
-            </div>
+            {(isSaving || records.some(r=>r.__dirty) || (!!reservedRow && reservedRow.__dirty)) && (
+              <div className="text-center p-2">
+                <button onClick={handleSaveAll} disabled={isSaving||isLoading} className={`px-4 py-2 rounded-md text-sm ${isSaving||isLoading?'bg-gray-300 text-gray-600 cursor-not-allowed':'bg-amber-600 text-white hover:bg-amber-700'}`}>{isSaving?'Saving...':'Save All'}</button>
+              </div>
+            )}
           </div>
           {confirmState.open && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -747,7 +1077,24 @@ const Excel = () => {
                     className="px-4 py-2 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300"
                   >Cancel</button>
                   <button
-                    onClick={()=>{ const recs = confirmState.scope==='all' ? records : [records[confirmState.rowIndex]]; setConfirmState({ open:false, scope:'', rowIndex:null }); doSave(recs) }}
+                    onClick={async ()=>{
+                      const isRow = confirmState.scope==='row'
+                      const isAll = confirmState.scope==='all'
+                      const isReserved = isRow && confirmState.rowIndex === -1
+                      setConfirmState({ open:false, scope:'', rowIndex:null })
+                      try{
+                        if(isReserved){
+                          await saveReservedRow()
+                          setSnack({ open:true, message:'Reserved row saved', type:'success' })
+                        }else if(isAll){
+                          if (selectedLocation) { try { await saveReservedRow() } catch {} }
+                          await doSave(records)
+                        }else{
+                          const rec = records[confirmState.rowIndex]
+                          if (rec) await doSave([rec])
+                        }
+                      }catch(e){ console.error(e); setSnack({open:true,message:'Save failed',type:'error'}) }
+                    }}
                     className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
                   >Save</button>
                 </div>

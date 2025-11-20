@@ -15,6 +15,7 @@ const SignUp = () => {
   const [mobileError, setMobileError] = useState('')
   const [dirty, setDirty] = useState(false)
   const [branchesList, setBranchesList] = useState([])
+  const [snack, setSnack] = useState({ open: false, message: '', type: 'warning' })
 
   const validateMobile = (value) => /^\d{10}$/.test(value)
   const toTitleCase = (s) => s.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase())
@@ -32,10 +33,16 @@ const SignUp = () => {
     })()
   }, [])
 
+  useEffect(() => {
+    if (!snack.open) return
+    const t = setTimeout(() => setSnack(s => ({ ...s, open: false })), 3000)
+    return () => clearTimeout(t)
+  }, [snack.open])
+
   const handleMobileChange = (e) => {
-    const value = e.target.value.trim()
-    setMobile(value)
-    if (value && !validateMobile(value)) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+    setMobile(digits)
+    if (digits && !validateMobile(digits)) {
       setMobileError('Mobile number must be 10 digits')
     } else {
       setMobileError('')
@@ -120,7 +127,7 @@ const SignUp = () => {
             name="name"
             placeholder="Enter your name"
             value={name}
-            onChange={(e) => { setName(toTitleCase(e.target.value)); setDirty(true) }}
+            onChange={(e) => { const v = e.target.value.replace(/\d/g, ''); setName(toTitleCase(v)); setDirty(true) }}
             className="w-full p-3 border border-gray-300 rounded text-base capitalize"
             disabled={isLoading}
             required
@@ -133,7 +140,7 @@ const SignUp = () => {
             id="branch"
             name="branch"
             value={branch}
-            onChange={(e) => { setBranch(e.target.value); setDirty(true) }}
+            onChange={(e) => { setBranch(e.target.value); setDirty(true); setSnack({ open: true, message: 'After selecting branch, it cannot be changed in future.', type: 'warning' }) }}
             className="w-full p-3 border border-gray-300 rounded text-base"
             disabled={isLoading}
             required
@@ -157,6 +164,8 @@ const SignUp = () => {
             className={`w-full p-3 border ${mobileError ? 'border-red-600' : 'border-gray-300'} rounded text-base`}
             disabled={isLoading}
             maxLength={10}
+            inputMode="numeric"
+            pattern="[0-9]{10}"
             required
           />
           {mobileError && (
@@ -193,6 +202,12 @@ const SignUp = () => {
           <Link to="/login" onClick={() => { resetForm(); setError(''); }} className="bg-transparent inline-block text-purple-700 cursor-pointer text-sm underline">
             Already have an account? Login
           </Link>
+        </div>
+
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-md shadow transition ${snack.open ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'} bg-amber-500 text-white`} role="alert" aria-live="polite">
+          <div className="flex items-center gap-3">
+            <span className="font-medium">{snack.message}</span>
+          </div>
         </div>
       </form>
     </div>

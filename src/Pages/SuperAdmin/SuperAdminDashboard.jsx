@@ -20,7 +20,7 @@ const allMonths = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ]
 
-const defaultBranches = ['Sangli','Belgaum','Kolhapur','Pune','Bengaluru','Mumbai','Hyderabad','Indore','Satara','Vijayapur']
+const defaultBranches = ['Sangli','Belgaum','Kolhapur','Pune','Bengaluru','Mumbai','Hyderabad','Indore','Satara','Vijyapur']
 
 const normalizeMonth = (monthStr, dateStr) => {
   if (dateStr) {

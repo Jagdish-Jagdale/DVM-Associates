@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
+import { signInWithEmailAndPassword } from 'firebase/auth'
 import { ref, get } from 'firebase/database'
 import { auth, db } from '../../firebase.js'
 import { useNavigate, Link } from 'react-router-dom'
@@ -33,24 +33,6 @@ const Login = ({ onLogin }) => {
     setMobileError('')
     setError('')
     setDirty(false)
-  }
-
-  const handlePasswordReset = async () => {
-    if (!mobile) {
-      setError('Please enter a mobile number to reset your password')
-      return
-    }
-    if (!validateMobile(mobile)) {
-      setError('Please enter a valid 10-digit mobile number')
-      return
-    }
-    try {
-      const email = formatEmail(mobile)
-      await sendPasswordResetEmail(auth, email)
-      setError('Password reset email sent. Check your inbox.')
-    } catch (error) {
-      setError(`Error: ${error.message}`)
-    }
   }
 
   const handleSubmit = async (e) => {
@@ -226,13 +208,6 @@ const Login = ({ onLogin }) => {
           >
             Don't have an account? Sign Up
           </Link>
-          <button
-            type="button"
-            onClick={handlePasswordReset}
-            className="bg-transparent border-0 text-purple-700 cursor-pointer text-sm underline block mx-auto"
-          >
-            Forgot Password?
-          </button>
         </div>
       </form>
     </div>

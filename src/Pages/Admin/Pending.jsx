@@ -3,6 +3,8 @@ import { ref, onValue } from 'firebase/database'
 import { db } from '../../../firebase.js'
 import * as XLSX from 'xlsx'
 import { FiDownload } from 'react-icons/fi'
+import PageHeader from '../../Components/UI/PageHeader.jsx'
+import SearchActionsCard from '../../Components/UI/SearchActionsCard.jsx'
 
 const locationBgClass = (loc) => {
   switch (loc) {
@@ -117,14 +119,35 @@ const TableRow = memo(({ record, index, handleInputChange, headers, formatRef })
               className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`}
             />
           ) : (field === 'Sr') ? (
-            <input
-              type="text"
-              id={`text-${field}-${record.globalIndex}`}
-              name={field}
-              value={String((index + 1))}
-              readOnly
-              className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100 text-center`}
-            />
+            (() => {
+              const reserved = !!localRecord.reservedFirst
+              const anyData = [
+                localRecord.Month, localRecord.VisitDate, localRecord.ReportDate, localRecord.TechnicalExecutive,
+                localRecord.Bank, localRecord.Branch, localRecord.ClientName, localRecord.ClientContactNo,
+                localRecord.Locations, localRecord.CaseInitiated, localRecord.Engineer, localRecord.ReportStatus,
+                localRecord.BillStatus, localRecord.ReceivedOn, localRecord.RecdDate, localRecord.GSTNo,
+                localRecord.Remark, localRecord.Amount, localRecord.GST, localRecord.Total,
+                localRecord.SoftCopy, localRecord.Print, localRecord.VisitStatus
+              ].some(v => {
+                if (typeof v === 'boolean') return v
+                if (v === 0) return true
+                return String(v ?? '').trim() !== ''
+              })
+              const borderCls = reserved ? (anyData ? 'border-green-500' : 'border-red-500') : ''
+              const titleText = reserved ? (anyData ? 'Reserved row saved' : 'Reserved row not saved') : ''
+              return (
+                <div className={`relative ${borderCls ? 'border-l-[3px] rounded-l ' + borderCls : ''}`} title={titleText}>
+                  <input
+                    type="text"
+                    id={`text-${field}-${record.globalIndex}`}
+                    name={field}
+                    value={String((index + 1))}
+                    readOnly
+                    className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100 text-center`}
+                  />
+                </div>
+              )
+            })()
           ) : (field === 'Month') ? (
             <input
               type="text"
@@ -250,6 +273,7 @@ const Pending = () => {
           GSTNo: rec.GSTNo || '',
           Remark: rec.Remark || '',
           Location: loc,
+          reservedFirst: !!rec.reservedFirst,
         }
         out.push(base)
       })
@@ -337,30 +361,41 @@ const Pending = () => {
 
   return (
     <div className="max-w-[1400px] mx-auto p-4 md:p-6">
-      <div className="w-full flex justify-end mb-6 md:mb-8">
-        <div className="flex items-center gap-2 text-base md:text-base text-gray-700 whitespace-nowrap border border-gray-300 rounded-full px-4 py-1.5 bg-white">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" aria-hidden="true"></span>
-          <span className="font-bold">Branch:</span> <span className="text-indigo-700">{selectedLocation || '—'}</span>
-        </div>
-      </div>
-
-      <h2 className="text-4xl font-bold text-gray-800 mb-4 text-center">Pending List</h2>
+      <PageHeader title="Pending List" subtitle="View and export pending records. Use filters to refine results." />
       {isLoading && <p className="text-center text-gray-600">Loading data from Firebase...</p>}
 
       {!isLoading && (
         <>
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-xl font-bold text-gray-800">
-              {selectedLocation} ({pendingRecords.length} records)
+          <SearchActionsCard
+            title="Search & Actions"
+            recordsCount={pendingRecords.length}
+            rightPrimary={
+              <button
+                onClick={handleDownloadPending}
+                className="px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 text-sm flex items-center gap-2"
+                title="Download"
+                aria-label="Download"
+              >
+                <span className="hidden sm:inline">Download</span>
+                <FiDownload className="sm:hidden" />
+              </button>
+            }
+          >
+            <div>
+              <select
+                value={selectedLocation}
+                onChange={(e)=> setSelectedLocation(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white"
+                title="Filter by Branch"
+                aria-label="Filter by Branch"
+              >
+                <option value="">All Branches</option>
+                {allowedLocations.map(l => (
+                  <option key={l.name} value={l.name}>{l.name}</option>
+                ))}
+              </select>
             </div>
-            <button
-              onClick={handleDownloadPending}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 text-sm"
-            >
-              <FiDownload className="text-base" />
-              <span>Download</span>
-            </button>
-          </div>
+          </SearchActionsCard>
 
           <div className="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
             <table className="w-full border-collapse text-sm">
