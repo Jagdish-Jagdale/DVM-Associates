@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Login from './Pages/Login.jsx'
 import MainLayout from './Pages/Admin/MainLayout.jsx'
 import SAMainLayout from './Pages/SuperAdmin/MainLayout.jsx'
-import SignUp from './Pages/SignUp.jsx'
 
 function RequireRole({ allowed, children }) {
   const role = (typeof window !== 'undefined' && (localStorage.getItem('authRole') || sessionStorage.getItem('authRole'))) || null
@@ -17,7 +16,6 @@ function App() {
     <Routes>
       <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<SignUp />} />
       <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/admin/*" element={<RequireRole allowed={['admin']}><MainLayout /></RequireRole>} />
       <Route path="/super-admin/*" element={<RequireRole allowed={['super-admin']}><SAMainLayout /></RequireRole>} />

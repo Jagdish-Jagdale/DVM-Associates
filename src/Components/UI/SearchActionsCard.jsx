@@ -2,7 +2,7 @@ import React from 'react'
 
 export default function SearchActionsCard({ title = 'Search & Actions', recordsCount = 0, rightPrimary = null, children, contentClassName }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 md:p-5 mb-4">
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 md:p-5 mb-4 font-sans">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h3 className="text-base font-semibold text-gray-800">{title}</h3>
         <div className="flex items-center gap-3">
@@ -10,6 +10,7 @@ export default function SearchActionsCard({ title = 'Search & Actions', recordsC
           {rightPrimary}
         </div>
       </div>
+      <hr className="border-gray-200 my-3" />
       {children ? (
         <div className={contentClassName || 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'}>
           {children}

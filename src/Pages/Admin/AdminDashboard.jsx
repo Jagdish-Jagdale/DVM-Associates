@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { ref, onValue } from 'firebase/database'
 import { db } from '../../../firebase.js'
 import { Bar } from 'react-chartjs-2'
@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js'
-import { FiDatabase, FiAlertTriangle } from 'react-icons/fi'
+import { FiDatabase, FiAlertTriangle, FiClock } from 'react-icons/fi'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -84,21 +84,29 @@ const Admin = () => {
   const [stats, setStats] = useState({
     totalRecords: 0,
     cancelCount: 0,
+    pendingCount: 0,
     locationCounts: {},
     locationCancelCounts: {},
     monthCounts: {},
     monthCancelCounts: {},
+    monthPendingCounts: {},
   })
 
-  const [selectedMonth, setSelectedMonth] = useState('All')
-  const [selectedYear, setSelectedYear] = useState('')
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()))
+  const authBranch = useMemo(() => {
+    try { return (localStorage.getItem('authBranch') || sessionStorage.getItem('authBranch') || '').trim() } catch { return '' }
+  }, [])
+  const branchLabel = useMemo(() => {
+    if (!authBranch) return 'All'
+    return authBranch === 'PCMC' ? 'Pune' : authBranch
+  }, [authBranch])
 
   useEffect(() => {
     const bankVisitsRef = ref(db, 'excel_records')
     const unsubscribe = onValue(bankVisitsRef, (snapshot) => {
       const data = snapshot.val()
       if (!data) {
-        setStats({ totalRecords: 0, cancelCount: 0, locationCounts: {}, locationCancelCounts: {}, monthCounts: {}, monthCancelCounts: {} })
+        setStats({ totalRecords: 0, cancelCount: 0, pendingCount: 0, locationCounts: {}, locationCancelCounts: {}, monthCounts: {}, monthCancelCounts: {}, monthPendingCounts: {} })
         return
       }
 
@@ -109,6 +117,7 @@ const Admin = () => {
         ReportStatus: record.ReportStatus || '',
         Month: record.Month || 'Unknown',
         VisitDate: record.VisitDate || '',
+        createdAt: record.createdAt || '',
       }))
 
       // Read the authenticated branch (if set) and filter records to that branch only
@@ -122,17 +131,15 @@ const Admin = () => {
         : records
 
       const filtered = branchFiltered.filter((r) => {
-        const dateForMonth = r.VisitDate || r.ReportDate || ''
-        const recordMonth = normalizeMonth(r.Month, dateForMonth)
-        const dateForYear = r.VisitDate || r.ReportDate
+        const dateForYear = r.createdAt
         const recordYear = dateForYear ? new Date(dateForYear).getFullYear().toString() : 'Unknown'
-        const matchMonth = selectedMonth === 'All' || recordMonth === selectedMonth
         const matchYear = !selectedYear || recordYear === selectedYear
-        return matchMonth && matchYear
+        return matchYear
       })
 
       const totalRecords = filtered.length
       const cancelCount = filtered.filter((r) => r.ReportStatus === 'Case Cancel').length
+      const pendingCount = filtered.filter((r) => String(r.BillStatus || '').toLowerCase() === 'pending').length
 
       const locationCounts = filtered.reduce((acc, r) => {
         acc[r.Location] = (acc[r.Location] || 0) + 1
@@ -147,14 +154,22 @@ const Admin = () => {
       }, {})
 
       const monthCounts = filtered.reduce((acc, r) => {
-        const m = normalizeMonth(r.Month, r.VisitDate || r.ReportDate)
+        const m = normalizeMonth(r.Month, r.createdAt)
         acc[m] = (acc[m] || 0) + 1
         return acc
       }, {})
 
       const monthCancelCounts = filtered.reduce((acc, r) => {
         if (r.ReportStatus === 'Case Cancel') {
-          const m = normalizeMonth(r.Month, r.VisitDate || r.ReportDate)
+          const m = normalizeMonth(r.Month, r.createdAt)
+          acc[m] = (acc[m] || 0) + 1
+        }
+        return acc
+      }, {})
+
+      const monthPendingCounts = filtered.reduce((acc, r) => {
+        if (String(r.BillStatus || '').toLowerCase() === 'pending') {
+          const m = normalizeMonth(r.Month, r.createdAt)
           acc[m] = (acc[m] || 0) + 1
         }
         return acc
@@ -163,15 +178,17 @@ const Admin = () => {
       setStats({
         totalRecords,
         cancelCount,
+        pendingCount,
         locationCounts,
         locationCancelCounts,
         monthCounts,
         monthCancelCounts,
+        monthPendingCounts,
       })
     })
 
     return () => unsubscribe()
-  }, [selectedMonth, selectedYear])
+  }, [selectedYear])
 
   const chartData = {
     labels: abbrMonths,
@@ -180,6 +197,11 @@ const Admin = () => {
         label: 'Total Records',
         data: allMonths.map((m) => stats.monthCounts[m] || 0),
         backgroundColor: 'rgba(124, 58, 237, 0.6)',
+      },
+      {
+        label: 'Pending',
+        data: allMonths.map((m) => stats.monthPendingCounts[m] || 0),
+        backgroundColor: 'rgba(245, 158, 11, 0.6)',
       },
       {
         label: 'Canceled Cases',
@@ -196,7 +218,7 @@ const Admin = () => {
       legend: { position: 'top' },
       title: {
         display: true,
-        text: 'Total and Canceled Records by Month',
+        text: 'Total, Pending and Canceled Records by Month',
       },
     },
     scales: {
@@ -215,34 +237,31 @@ const Admin = () => {
     <div className="min-h-screen bg-[#f0f4f8] p-4 flex justify-center">
       <div className="w-full max-w-6xl">
         {/* Header with title and filters */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-4xl font-bold text-gray-800">Dashboard</h2>
-          <div className="flex items-center gap-4">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-            >
-              <option value="All">All Months</option>
-              {allMonths.map((month, idx) => (
-                <option key={month} value={month}>
-                  {abbrMonths[idx]}
-                </option>
-              ))}
-            </select>
-
-            <input
-              type="text"
-              placeholder="Year"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none w-28 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-            />
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-4xl font-bold text-gray-800">Dashboard</h2>
+            <div className="flex items-center gap-4">
+              <input
+                type="text"
+                placeholder="Year"
+                value={selectedYear}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/\D/g, '').slice(0, 4)
+                  setSelectedYear(next)
+                }}
+                className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none w-28 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              />
+              <div className="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 text-base flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" aria-hidden="true"></span>
+                <span className="font-semibold">Branch:</span> <span className="text-indigo-700">{branchLabel}</span>
+              </div>
+            </div>
           </div>
+          <div className="mt-3 border-t border-gray-200" />
         </div>
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-gray-700 mb-1">Total Records</h3>
@@ -259,6 +278,15 @@ const Admin = () => {
             </div>
             <div className="p-3 rounded-full bg-red-100">
               <FiAlertTriangle className="text-red-500" size={28} />
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-1">Pending</h3>
+              <p className="text-3xl font-bold text-amber-500">{stats.pendingCount}</p>
+            </div>
+            <div className="p-3 rounded-full bg-amber-100">
+              <FiClock className="text-amber-500" size={28} />
             </div>
           </div>
         </div>

@@ -88,10 +88,12 @@ const Settings = () => {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <div className="text-lg font-semibold text-gray-800">{items.find(i=>i.key===selected)?.title}</div>
-          <button type="button" onClick={openAdd} className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 text-sm">
-            <FiPlus className="text-base" />
-            <span>Add</span>
-          </button>
+          {selected !== 'branches' && (
+            <button type="button" onClick={openAdd} className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 text-sm">
+              <FiPlus className="text-base" />
+              <span>Add</span>
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
@@ -191,7 +193,7 @@ const Settings = () => {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input value={form.name} onChange={(e)=>setForm(prev=>({...prev, name: e.target.value}))} className="w-full border border-gray-300 rounded px-3 py-2" required />
+                <input autoFocus value={form.name} onChange={(e)=>setForm(prev=>({...prev, name: e.target.value}))} className="w-full border border-gray-300 rounded px-3 py-2" required />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
@@ -231,7 +233,7 @@ const Settings = () => {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input value={edit.row?.name || ''} onChange={(e)=> setEdit(prev => ({ ...prev, row: { ...(prev.row||{}), name: e.target.value } }))} className="w-full border border-gray-300 rounded px-3 py-2" required />
+                <input autoFocus value={edit.row?.name || ''} onChange={(e)=> setEdit(prev => ({ ...prev, row: { ...(prev.row||{}), name: e.target.value } }))} className="w-full border border-gray-300 rounded px-3 py-2" required />
               </div>
               
             </div>

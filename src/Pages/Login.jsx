@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { ref, get } from 'firebase/database'
 import { auth, db } from '../../firebase.js'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { FiPhone, FiLock } from 'react-icons/fi'
 
 const Login = ({ onLogin }) => {
   const navigate = useNavigate()
@@ -13,13 +14,26 @@ const Login = ({ onLogin }) => {
   const [mobileError, setMobileError] = useState('')
   const [dirty, setDirty] = useState(false)
 
+  const [snack, setSnack] = useState({ open: false, message: '', type: 'error' })
+
+  useEffect(() => {
+    if (!snack.open) return
+    const t = setTimeout(() => setSnack((s) => ({ ...s, open: false })), 3000)
+    return () => clearTimeout(t)
+  }, [snack.open])
+
+  useEffect(() => {
+    if (!error) return
+    setSnack({ open: true, message: error, type: 'error' })
+  }, [error])
+
   const validateMobile = (value) => /^\d{10}$/.test(value)
   const formatEmail = (value) => `${value}@admin.com`
 
   const handleMobileChange = (e) => {
-    const value = e.target.value.trim()
-    setMobile(value)
-    if (value && !validateMobile(value)) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+    setMobile(digits)
+    if (digits && !validateMobile(digits)) {
       setMobileError('Mobile number must be 10 digits')
     } else {
       setMobileError('')
@@ -142,74 +156,89 @@ const Login = ({ onLogin }) => {
   const canSubmit = dirty && validateMobile(mobile) && password.length >= 6 && !mobileError
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f0f4f8]">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md w-full max-w-[400px]">
-        <h2 className="text-purple-700 text-center mb-6 text-2xl font-bold">
-          Admin Login
-        </h2>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4" style={{fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif'}}>
+      <form onSubmit={handleSubmit} className="w-full max-w-[420px] bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200 px-8 py-10">
+        <div className="flex flex-col items-center mb-8">
+          <img src="/src/assets/DVMAssociates.png" alt="DVM & Associates" className="h-20 w-20 rounded-full shadow-sm bg-white ring-1 ring-gray-200 object-contain p-1" />
+          <h2 className="mt-4 text-2xl font-semibold text-gray-900" style={{fontFamily: 'Poppins, Inter, sans-serif'}}>Welcome back</h2>
+          <p className="text-gray-500 text-sm">Sign in to your dashboard</p>
+        </div>
 
-        {error && (
-          <div className="bg-red-100 text-red-600 p-3 rounded mb-4 text-center">
-            {error}
-          </div>
+        {false && (
+          <div className="hidden">{error}</div>
         )}
 
-        <div className="mb-6">
-          <label htmlFor="mobile" className="block text-purple-700 mb-2 font-medium">
+        <div className="mb-5">
+          <label htmlFor="mobile" className="block text-gray-700 mb-2 text-sm font-medium">
             Mobile Number
           </label>
-          <input
-            type="text"
-            id="mobile"
-            name="mobile"
-            placeholder="Enter 10-digit mobile number"
-            value={mobile}
-            onChange={handleMobileChange}
-            className={`w-full p-3 border ${mobileError ? 'border-red-600' : 'border-gray-300'} rounded text-base`}
-            disabled={isLoading}
-            maxLength={10}
-            required
-          />
-          {mobileError && (
-            <div className="text-red-600 text-sm mt-1">{mobileError}</div>
+          <div className={`relative rounded-lg shadow-sm ${mobileError ? 'ring-1 ring-red-500' : ''}`}>
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+              <FiPhone />
+            </span>
+            <input
+              type="text"
+              id="mobile"
+              name="mobile"
+              placeholder="10-digit mobile number"
+              value={mobile}
+              onChange={handleMobileChange}
+              className={`w-full pl-10 pr-3 py-3 border ${mobileError ? 'border-red-500' : 'border-gray-300'} rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+              disabled={isLoading}
+              maxLength={10}
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              onKeyDown={(e) => { if(['e','E','+','-','.',' '].includes(e.key)) e.preventDefault() }}
+              required
+            />
+          </div>
+          {false && (
+            <div className="hidden">{mobileError}</div>
           )}
         </div>
 
         <div className="mb-6">
-          <label htmlFor="password" className="block text-purple-700 mb-2 font-medium">
+          <label htmlFor="password" className="block text-gray-700 mb-2 text-sm font-medium">
             Password
           </label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            placeholder="Enter password (min 6 characters)"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setDirty(true) }}
-            className="w-full p-3 border border-gray-300 rounded text-base"
-            disabled={isLoading}
-            required
-          />
+          <div className="relative rounded-lg shadow-sm">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+              <FiLock />
+            </span>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Enter password (min 6 characters)"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setDirty(true) }}
+              className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              disabled={isLoading}
+              required
+            />
+          </div>
         </div>
 
         <button
           type="submit"
-          className="w-full p-3 bg-purple-700 text-white rounded text-base font-medium disabled:opacity-60 disabled:cursor-not-allowed mb-4"
+          className="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition disabled:opacity-60 disabled:cursor-not-allowed mb-4"
           disabled={isLoading || !canSubmit}
         >
-          {isLoading ? 'Processing...' : 'Login'}
+          {isLoading ? 'Processing...' : 'Sign In'}
         </button>
 
-        <div className="text-center">
-          <Link
-            to="/signup"
-            onClick={() => { resetForm() }}
-            className="bg-transparent inline-block text-purple-700 cursor-pointer text-sm underline mb-2"
-          >
-            Don't have an account? Sign Up
-          </Link>
-        </div>
+        
+
       </form>
+      <div
+        className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-md shadow transition ${snack.open ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'} ${snack.type === 'error' ? 'bg-red-600' : snack.type === 'success' ? 'bg-emerald-600' : snack.type === 'warning' ? 'bg-amber-500' : 'bg-gray-800'} text-white`}
+        role="alert"
+        aria-live="polite"
+      >
+        <div className="flex items-center gap-3">
+          <span className="font-medium">{snack.message}</span>
+        </div>
+      </div>
     </div>
   )
 }

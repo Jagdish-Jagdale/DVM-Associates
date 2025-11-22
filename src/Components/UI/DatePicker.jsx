@@ -92,7 +92,7 @@ export default function DatePicker({ value, onChange, onClear, disabled=false, l
             <button type="button" onClick={()=> setMm(m=>{ if(m===11){ setYy(y=>y+1); return 0 } return m+1 })} className="p-2 rounded hover:bg-gray-100" aria-label="Next month"><FiChevronRight/></button>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 mb-1">
-            {dow.map(d=> <div key={d} className="py-1">{d}</div>)}
+            {dow.map((d,i)=> <div key={i} className="py-1">{d}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-1">
             {grid.map((c,i)=>{

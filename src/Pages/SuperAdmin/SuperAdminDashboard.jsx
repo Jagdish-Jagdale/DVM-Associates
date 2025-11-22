@@ -86,12 +86,12 @@ const SuperAdminDashboard = () => {
         BillStatus: record.BillStatus || '',
         Month: record.Month || 'Unknown',
         VisitDate: record.VisitDate || '',
+        createdAt: record.createdAt || '',
       }))
 
       const filtered = records.filter((r) => {
-        const dateForMonth = r.VisitDate || r.ReportDate || ''
-        const recordMonth = normalizeMonth(r.Month, dateForMonth)
-        const dateForYear = r.VisitDate || r.ReportDate
+        const recordMonth = normalizeMonth(r.Month, r.createdAt)
+        const dateForYear = r.createdAt
         const recordYear = dateForYear ? new Date(dateForYear).getFullYear().toString() : 'Unknown'
         const matchMonth = selectedMonth === 'All' || recordMonth === selectedMonth
         const matchYear = !selectedYear || recordYear === selectedYear
@@ -122,14 +122,14 @@ const SuperAdminDashboard = () => {
       }, {})
 
       const monthCounts = filtered.reduce((acc, r) => {
-        const m = normalizeMonth(r.Month, r.VisitDate || r.ReportDate)
+        const m = normalizeMonth(r.Month, r.createdAt)
         acc[m] = (acc[m] || 0) + 1
         return acc
       }, {})
 
       const monthCancelCounts = filtered.reduce((acc, r) => {
         if (r.ReportStatus === 'Case Cancel') {
-          const m = normalizeMonth(r.Month, r.VisitDate || r.ReportDate)
+          const m = normalizeMonth(r.Month, r.createdAt)
           acc[m] = (acc[m] || 0) + 1
         }
         return acc
@@ -137,7 +137,7 @@ const SuperAdminDashboard = () => {
 
       const monthPendingCounts = filtered.reduce((acc, r) => {
         if (r.BillStatus === 'Pending') {
-          const m = normalizeMonth(r.Month, r.VisitDate || r.ReportDate)
+          const m = normalizeMonth(r.Month, r.createdAt)
           acc[m] = (acc[m] || 0) + 1
         }
         return acc
@@ -196,32 +196,35 @@ const SuperAdminDashboard = () => {
   return (
     <div className="min-h-screen bg-[#f0f4f8] p-4 flex justify-center">
       <div className="w-full max-w-6xl">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-4xl font-bold text-gray-800">Super Admin Dashboard</h2>
-          <div className="flex items-center gap-4">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-            >
-              <option value="All">All Months</option>
-              {allMonths.map((month) => (
-                <option key={month} value={month}>{month}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Year"
-              value={selectedYear}
-              inputMode="numeric"
-              maxLength={4}
-              onChange={(e) => {
-                const v = (e.target.value || '').replace(/\D/g, '').slice(0, 4)
-                setSelectedYear(v)
-              }}
-              className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none w-28 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-            />
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-4xl font-bold text-gray-800">Super Admin Dashboard</h2>
+            <div className="flex items-center gap-4">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              >
+                <option value="All">All Months</option>
+                {allMonths.map((month) => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Year"
+                value={selectedYear}
+                inputMode="numeric"
+                maxLength={4}
+                onChange={(e) => {
+                  const v = (e.target.value || '').replace(/\D/g, '').slice(0, 4)
+                  setSelectedYear(v)
+                }}
+                className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none w-28 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              />
+            </div>
           </div>
+          <div className="mt-3 border-t border-gray-200" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
