@@ -4,7 +4,7 @@ import { ref, get } from 'firebase/database'
 import { auth, db } from '../../firebase.js'
 import { useNavigate } from 'react-router-dom'
 import { FiPhone, FiLock } from 'react-icons/fi'
-import logo from '../assets/DVMAssociates.png'
+import logo from '../assets/D_V_Mane_Associates_removebg.png'
 const Login = ({ onLogin }) => {
   const navigate = useNavigate()
   const [mobile, setMobile] = useState('')
@@ -159,12 +159,15 @@ const Login = ({ onLogin }) => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4" style={{fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif'}}>
       <form onSubmit={handleSubmit} className="w-full max-w-[420px] bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200 px-8 py-10">
         <div className="flex flex-col items-center mb-8">
-<img
-  src={logo}
-  alt="DVM & Associates"
-  className="h-20 w-20 rounded-full shadow-sm bg-white ring-1 ring-gray-200 object-contain p-1"
-/>
-          <h2 className="mt-4 text-2xl font-semibold text-gray-900" style={{fontFamily: 'Poppins, Inter, sans-serif'}}>Welcome back</h2>
+<div className="h-28 w-28 rounded-full shadow-sm bg-white ring-1 ring-gray-200 flex items-center justify-center p-2 mb-2">
+  <img
+    src={logo}
+    alt="DVM & Associates"
+    className="h-20 w-20 object-contain"
+    style={{ objectFit: 'contain' }}
+  />
+</div>
+          <h2 className="mt-1 text-2xl font-semibold text-gray-900" style={{fontFamily: 'Poppins, Inter, sans-serif'}}>Welcome back</h2>
           <p className="text-gray-500 text-sm">Sign in to your dashboard</p>
         </div>
 

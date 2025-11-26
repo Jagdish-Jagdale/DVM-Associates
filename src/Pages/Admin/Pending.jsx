@@ -159,6 +159,11 @@ const toDisplayDate = (s) => {
   return `${d}/${m}/${y}`;
 };
 
+const formatCurrency = (n) => {
+  const num = Number(n) || 0;
+  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+};
+
 const TableRow = memo(
   ({ record, index, handleInputChange, headers, formatRef }) => {
     const [localRecord, setLocalRecord] = useState(record);
@@ -212,11 +217,9 @@ const TableRow = memo(
                 type="text"
                 id={`text-${field}-${record.globalIndex}`}
                 name={field}
-                value={
-                  (localRecord.Location === "PCMC"
-                    ? "Pune"
-                    : localRecord.Location) || ""
-                }
+                value={`DVM/${shortOf(
+                  localRecord.Location === "PCMC" ? "Pune" : localRecord.Location
+                )}/${getYearPair()}`}
                 readOnly
                 className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`}
               />
@@ -302,18 +305,16 @@ const TableRow = memo(
               />
             ) : ["Amount", "GST", "Total"].includes(field) ? (
               <input
-                type="number"
+                type="text"
                 id={`number-${field}-${record.globalIndex}`}
                 name={field}
-                value={localRecord[field] ?? ""}
-                onChange={(e) =>
-                  onChange(
-                    field,
-                    e.target.value === "" ? "" : Number(e.target.value)
-                  )
+                value={
+                  localRecord[field] === "" || localRecord[field] === null || typeof localRecord[field] === "undefined"
+                    ? ""
+                    : `₹ ${formatCurrency(localRecord[field])}`
                 }
                 readOnly
-                className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`}
+                className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100 text-right`}
               />
             ) : (
               <input
@@ -557,15 +558,9 @@ const Pending = () => {
   }, [allowedLocations]);
 
   const formatRefDisplay = useCallback((rec) => {
-    if (!rec) return "";
-    const yp =
-      yearPairFromOffice(rec.OfficeNo) ||
-      yearPairFromDate(rec.VisitDate || rec.ReportDate) ||
-      "";
-    if (!rec.RefNo || !yp) return rec.RefNo || "";
-    const loc = rec.Location === "PCMC" ? "Pune" : rec.Location;
-    const num = String(rec.RefNo).toString().padStart(3, "0");
-    return `DVM/${shortOf(loc)}/${yp}_${num}`;
+    const ref = rec && (rec.RefNo || rec.committedRefNo);
+    if (!ref) return "";
+    return String(ref).padStart(3, "0");
   }, []);
 
   useEffect(() => {
@@ -620,6 +615,22 @@ const Pending = () => {
     return arr;
   }, [pendingRecords, dateFilter, searchText, formatRefDisplay]);
 
+  const totalPendingAmount = useMemo(() => {
+    return displayRecords.reduce((sum, r) => {
+      const t = Number(r.Total);
+      if (!isNaN(t) && t > 0) return sum + t;
+      const a = Number(r.Amount) || 0;
+      const g = Number(r.GST) || 0;
+      return sum + a + g;
+    }, 0);
+  }, [displayRecords]);
+
+  const formattedTotalPending = formatCurrency(totalPendingAmount);
+  const totalPendingDigits = useMemo(() => {
+    const n = Math.floor(Math.abs(Number(totalPendingAmount) || 0));
+    return n.toString().length;
+  }, [totalPendingAmount]);
+
   const handleInputChange = (globalIndex, field, value) => {
     const updated = [...pendingRecords];
     if (globalIndex < 0 || globalIndex >= updated.length) return;
@@ -633,11 +644,14 @@ const Pending = () => {
     const data = displayRecords.map((r, i) => ({
       Sr: (i + 1).toString(),
       Month: r.Month,
-      Office: r.Location === "PCMC" ? "Pune" : r.Location,
-      "Ref No":
-        typeof formatRefDisplay === "function"
-          ? formatRefDisplay(r)
-          : r.RefNo || "",
+      Office: (() => {
+        const loc = r.Location === "PCMC" ? "Pune" : r.Location;
+        return `DVM/${shortOf(loc)}/${getYearPair()}`;
+      })(),
+      "Ref No": (() => {
+        const refStr = r.RefNo || r.committedRefNo || "";
+        return refStr ? String(refStr).padStart(3, "0") : "";
+      })(),
       "Visit Date": toDisplayDate(r.VisitDate),
       "Report Date": toDisplayDate(r.ReportDate),
       "Technical Executive": r.TechnicalExecutive || "",
@@ -720,22 +734,47 @@ const Pending = () => {
         <>
           <SearchActionsCard
             recordsCount={displayRecords.length}
-            contentClassName="flex items-end gap-3 flex-nowrap"
+            contentClassName="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3"
             rightPrimary={
-              <button
-                onClick={handleDownloadPending}
-                disabled={displayRecords.length === 0}
-                className={`px-3 py-2 rounded-md flex items-center gap-2 text-sm ${
-                  displayRecords.length === 0
-                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                    : "bg-indigo-600 text-white hover:bg-indigo-700"
-                }`}
-                title="Download"
-                aria-label="Download"
-              >
-                <FiDownload />
-                <span>Download</span>
-              </button>
+              <div className="flex items-center gap-4">
+                <div
+                  className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 h-10 shadow text-sm flex flex-col justify-center relative group"
+                >
+                  <div className="opacity-90 text-[11px] leading-none">Total Pending</div>
+                  <div
+                    className="font-bold text-base leading-tight"
+                    style={{ fontFamily: "'Inter', 'Segoe UI', Roboto, Arial, 'Helvetica Neue', sans-serif" }}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>₹</span>
+                      <span
+                        className={totalPendingDigits >= 8 ? "inline-block max-w-[14ch] truncate align-bottom" : ""}
+                      >
+                        {formattedTotalPending}
+                      </span>
+                    </div>
+                    {totalPendingDigits >= 8 && (
+                      <div className="absolute left-0 top-full mt-1 z-50 pointer-events-none bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-normal break-all max-w-[16ch] invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-150">
+                        ₹ {formattedTotalPending}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={handleDownloadPending}
+                  disabled={displayRecords.length === 0}
+                  className={`h-10 px-4 rounded-md inline-flex items-center gap-2 text-sm ${
+                    displayRecords.length === 0
+                      ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  }`}
+                  title="Download"
+                  aria-label="Download"
+                >
+                  <FiDownload />
+                  <span>Download</span>
+                </button>
+              </div>
             }
           >
             <div className="flex-1 min-w-0">
@@ -762,13 +801,13 @@ const Pending = () => {
           </SearchActionsCard>
 
           <div className="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-xs sm:text-sm">
               <thead className="bg-indigo-600 text-white sticky top-0 z-30">
                 <tr>
                   {headers.map((header) => (
                     <th
                       key={header}
-                      className={`px-2 py-3 text-left font-semibold border border-gray-200 whitespace-nowrap ${minw(
+                      className={`px-2 py-2 sm:py-3 text-left font-semibold border border-gray-200 whitespace-nowrap ${minw(
                         header
                       )}`}
                     >

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ref, onValue, update, remove, set, get } from "firebase/database";
-import { db } from "../../../firebase.js";
+import { db, auth } from "../../../firebase.js";
+import { fetchSignInMethodsForEmail } from "firebase/auth";
 import * as XLSX from "xlsx";
 import { ThreeDots } from "react-loader-spinner";
 
@@ -16,6 +17,7 @@ import {
   FiPlus,
   FiEye,
   FiEyeOff,
+  FiAlertTriangle,
 } from "react-icons/fi";
 import PageHeader from "../../Components/UI/PageHeader.jsx";
 
@@ -25,7 +27,7 @@ const Admins = () => {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [confirm, setConfirm] = useState({ open: false, mobile: "", name: "" });
+  const [confirm, setConfirm] = useState({ open: false, mobile: "", name: "", text: "", deleting: false });
   const [edit, setEdit] = useState({
     open: false,
     mobile: "",
@@ -203,9 +205,17 @@ const Admins = () => {
     try {
       setCreate((c) => ({ ...c, saving: true }));
       const adminRef = ref(db, `admins/${mobile}`);
-      const existing = await get(adminRef);
-      if (existing.exists()) {
-        setSnack({ open: true, message: "This mobile is already registered", type: "error" });
+      const email = `${mobile}@admin.com`.toLowerCase();
+      // Check both DB and Auth for duplicates
+      const [existing, methods] = await Promise.all([
+        get(adminRef),
+        fetchSignInMethodsForEmail(auth, email)
+      ]);
+      const existsInDB = existing && typeof existing.exists === "function" ? existing.exists() : false;
+      const existsInAuth = Array.isArray(methods) ? methods.length > 0 : false;
+
+      if (existsInDB || existsInAuth) {
+        setSnack({ open: true, message: "Admin with this mobile number already exists", type: "error" });
         setCreate((c) => ({ ...c, saving: false }));
         return;
       }
@@ -251,7 +261,6 @@ const Admins = () => {
       await update(ref(db, `admins/${edit.mobile}`), {
         name: (edit.name || "").trim(),
         branch: (edit.branch || "").trim(),
-        role: edit.role || "admin",
         password: edit.password || "",
         createdAt: createdAtVal,
       });
@@ -278,12 +287,39 @@ const Admins = () => {
   };
 
   const askDelete = (a) =>
-    setConfirm({ open: true, mobile: a.mobile, name: a.name });
-  const cancelDelete = () => setConfirm({ open: false, mobile: "", name: "" });
+    setConfirm({ open: true, mobile: a.mobile, name: a.name, text: "", deleting: false });
+  const cancelDelete = () => setConfirm({ open: false, mobile: "", name: "", text: "", deleting: false });
   const doDelete = async () => {
-    if (!confirm.mobile) return;
+    if (!confirm.mobile || confirm.deleting) return;
     try {
-      await remove(ref(db, `admins/${confirm.mobile}`));
+      setConfirm((c) => ({ ...c, deleting: true }));
+      const mobile = confirm.mobile;
+
+      try {
+        const snap = await get(ref(db, "excel_records"));
+        const data = snap.val() || {};
+        const updates = {};
+        Object.keys(data).forEach((k) => {
+          const v = data[k] || {};
+          const owned = [
+            v.createdBy,
+            v.adminMobile,
+            v.ownerMobile,
+            v.created_by,
+            v.createdByMobile,
+          ]
+            .map((x) => (x == null ? "" : String(x)))
+            .includes(String(mobile));
+          if (owned) {
+            updates[`excel_records/${k}`] = null;
+          }
+        });
+        if (Object.keys(updates).length) {
+          await update(ref(db), updates);
+        }
+      } catch {}
+
+      await remove(ref(db, `admins/${mobile}`));
       setSnack({ open: true, message: "Admin deleted", type: "success" });
     } catch (err) {
       console.error(err);
@@ -367,28 +403,28 @@ const Admins = () => {
         </div>
       ) : (
         <div className="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full border-collapse text-xs sm:text-sm">
             <thead className="bg-indigo-600 text-white">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold border border-gray-200">
+                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
                   Sr No
                 </th>
-                <th className="px-3 py-3 text-left font-semibold border border-gray-200">
+                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
                   Name
                 </th>
-                <th className="px-3 py-3 text-left font-semibold border border-gray-200">
+                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
                   Branch
                 </th>
-                <th className="px-3 py-3 text-left font-semibold border border-gray-200">
+                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
                   Mobile
                 </th>
-                <th className="px-3 py-3 text-left font-semibold border border-gray-200">
+                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
                   Role
                 </th>
-                <th className="px-3 py-3 text-left font-semibold border border-gray-200">
+                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
                   Created
                 </th>
-                <th className="px-3 py-3 text-left font-semibold border border-gray-200">
+                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
                   Actions
                 </th>
               </tr>
@@ -404,7 +440,9 @@ const Admins = () => {
                       {start + i + 1}
                     </td>
                     <td className="px-3 py-2 border border-gray-200 align-top">
-                      {a.name}
+                      <div className="max-w-[180px] truncate" title={a.name}>
+                        {a.name}
+                      </div>
                     </td>
                     <td className="px-3 py-2 border border-gray-200 align-top">
                       {a.branch}
@@ -599,50 +637,73 @@ const Admins = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl ring-1 ring-gray-200 p-6 md:p-7 w-full max-w-md transform transition-all">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Confirm Delete
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">Confirm Delete</h3>
               <button
-                onClick={cancelDelete}
-                className="p-1 rounded hover:bg-gray-100"
+                onClick={confirm.deleting ? undefined : cancelDelete}
+                className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
                 aria-label="Close"
+                disabled={confirm.deleting}
               >
                 <FiX />
               </button>
             </div>
+
+            <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 text-red-700 border border-red-200 mb-3">
+              <FiAlertTriangle className="mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold">This action is permanent.</p>
+                <p>
+                  Deleting this admin will permanently remove the admin account and
+                  all records owned by this admin from the system. This cannot be undone.
+                </p>
+              </div>
+            </div>
+
             <p className="text-gray-700 mb-3">
-              Type <span className="font-semibold">DELETE ADMIN</span> to
-              confirm deletion of{" "}
-              <span className="font-semibold">{confirm.name}</span> (
-              {confirm.mobile}).
+              Type <span className="font-semibold">DELETE ADMIN</span> to confirm deletion of
+              {" "}
+              <span className="font-semibold">
+                {String(confirm.name || "Admin").length > 24
+                  ? String(confirm.name || "Admin").slice(0, 24) + "..."
+                  : String(confirm.name || "Admin")}
+              </span>
+              {" "}(<span className="break-all">{confirm.mobile}</span>).
             </p>
+
             <input
               type="text"
               value={confirm.text || ""}
-              onChange={(e) =>
-                setConfirm((prev) => ({ ...prev, text: e.target.value }))
-              }
+              onChange={(e) => setConfirm((prev) => ({ ...prev, text: e.target.value }))}
               placeholder="DELETE ADMIN"
               autoFocus
-              className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className={`w-full border rounded-md px-3 py-2 mb-1 focus:outline-none focus:ring-2 ${
+                (confirm.text || "").trim() && (confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN"
+                  ? "border-red-500 ring-red-500 bg-red-50"
+                  : "border-gray-300 focus:ring-red-500"
+              }`}
             />
+            {(confirm.text || "").trim() && (confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN" && (
+              <p className="text-xs text-red-600 mb-3">Please type DELETE ADMIN exactly as shown.</p>
+            )}
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={cancelDelete}
-                className="px-4 py-2 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 shadow-sm"
+                disabled={confirm.deleting}
+                className="px-4 py-2 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 shadow-sm disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
                 onClick={doDelete}
-                disabled={(confirm.text || "").trim() !== "DELETE ADMIN"}
+                disabled={(confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN" || confirm.deleting}
                 className={`px-4 py-2 rounded-md ${
-                  (confirm.text || "").trim() === "DELETE ADMIN"
+                  (confirm.text || "").trim().toUpperCase() === "DELETE ADMIN" && !confirm.deleting
                     ? "bg-red-600 text-white hover:bg-red-700 shadow-sm"
                     : "bg-gray-300 text-gray-500 cursor-not-allowed"
                 }`}
               >
-                Delete
+                {confirm.deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
@@ -727,7 +788,7 @@ const Admins = () => {
                   )}
                 </select>
               </div>
-              <div>
+              <div className="hidden">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Role
                 </label>

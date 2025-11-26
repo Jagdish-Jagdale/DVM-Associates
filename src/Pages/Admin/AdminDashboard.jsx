@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { ref, onValue } from 'firebase/database'
+import { ref, onValue, get } from 'firebase/database'
 import { db } from '../../../firebase.js'
 import { Bar } from 'react-chartjs-2'
 import {
@@ -91,6 +91,7 @@ const Admin = () => {
     monthCancelCounts: {},
     monthPendingCounts: {},
   })
+  const [adminName, setAdminName] = useState('')
 
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()))
   const authBranch = useMemo(() => {
@@ -100,6 +101,21 @@ const Admin = () => {
     if (!authBranch) return 'All'
     return authBranch === 'PCMC' ? 'Pune' : authBranch
   }, [authBranch])
+
+  useEffect(() => {
+    let m = ''
+    try {
+      m = (localStorage.getItem('authMobile') || sessionStorage.getItem('authMobile') || '').trim()
+    } catch {}
+    if (!m) { setAdminName(''); return }
+    const r = ref(db, `admins/${m}`)
+    get(r)
+      .then(s => {
+        const name = s.exists() ? (s.val()?.name || '') : ''
+        setAdminName(name)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const bankVisitsRef = ref(db, 'excel_records')
@@ -238,9 +254,12 @@ const Admin = () => {
       <div className="w-full max-w-6xl">
         {/* Header with title and filters */}
         <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-4xl font-bold text-gray-800">Dashboard</h2>
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800">Dashboard</h2>
+              <p className="mt-1 text-gray-600 text-base ">Welcome, {adminName || 'Admin'}...!!</p>
+            </div>
+            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto sm:justify-end">
               <input
                 type="text"
                 placeholder="Year"
@@ -251,7 +270,7 @@ const Admin = () => {
                 }}
                 className="border border-gray-300 rounded px-4 py-2 text-base bg-white outline-none w-28 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
-              <div className="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 text-base flex items-center gap-2">
+              <div className="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 text-sm sm:text-base flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" aria-hidden="true"></span>
                 <span className="font-semibold">Branch:</span> <span className="text-indigo-700">{branchLabel}</span>
               </div>

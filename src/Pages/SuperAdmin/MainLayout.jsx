@@ -12,7 +12,7 @@ import { MdSpaceDashboard } from 'react-icons/md'
 import { FiMenu, FiX, FiClock, FiSettings, FiUsers } from 'react-icons/fi'
 import { FaFileExcel } from 'react-icons/fa'
 import { RiLogoutBoxRLine } from 'react-icons/ri'
-import logo from '../../assets/DVMAssociation.png'
+import logo from '../../assets/D_V_Mane_Associates_removebg.png'
 import { signOut } from 'firebase/auth'
 import { auth } from '../../../firebase.js'
 

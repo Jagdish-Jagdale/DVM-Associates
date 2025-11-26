@@ -221,6 +221,8 @@ const TableRow = memo(
     missingFields,
     showDelete,
     onDeleteRow,
+    serverMonth,
+    serverYearPair,
   }) => {
     const isNoFee = record.ReceivedOn === "No Fee";
     const rowClass = isNoFee
@@ -299,12 +301,15 @@ const TableRow = memo(
         );
       }
       if (field === "OfficeNo") {
-        const display =
-          (record.Location === "PCMC" ? "Pune" : record.Location) || "";
+        const locName = record.Location === "PCMC" ? "Pune" : record.Location;
+        const short = (
+          defaultLocations.find((l) => l.name === locName) || {}
+        ).shortForm || "SNGL";
+        const office = `DVM/${short}/${serverYearPair || getYearPair()}`;
         return (
           <input
             type="text"
-            value={display}
+            value={office}
             readOnly
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`}
           />
@@ -332,26 +337,14 @@ const TableRow = memo(
         );
       }
       if (field === "Month") {
-        const val = record.Month || "";
-        const inOpts = monthOptions.includes(val);
+        const display = record.Month || serverMonth || "";
         return (
-          <select
-            value={val}
-            onChange={(e) =>
-              onChangeField(record.globalIndex, "Month", e.target.value)
-            }
-            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
-          >
-            <option value="">Select Month</option>
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-            {!inOpts && val && (
-              <option value={val}>{monthAbbrFromAny(val)}</option>
-            )}
-          </select>
+          <input
+            type="text"
+            value={display}
+            readOnly
+            className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100${err}`}
+          />
         );
       }
       if (["ReportStatus", "BillStatus"].includes(field)) {
@@ -396,21 +389,28 @@ const TableRow = memo(
       }
       if (field === "ReceivedOn") {
         return (
-          <input
-            type="text"
+          <select
             value={record[field] || ""}
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-white`}
-          />
+          >
+            <option value="">Select Received On</option>
+            {(dropdownOptions[field] || []).map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
         );
       }
-      if (field === "Sr ") {
+      if (field === "Sr") {
         const isReservedTop = record.globalIndex === -1;
         const showReserved = isReservedTop || !!record.reservedFirst;
-        const anyData = [
-          record.Month,
+        const valuesToCheck = [
+          // Exclude Month for reserved row (Month is auto-filled)
+          ...(showReserved ? [] : [record.Month]),
           record.VisitDate,
           record.ReportDate,
           record.TechnicalExecutive,
@@ -433,7 +433,8 @@ const TableRow = memo(
           record.SoftCopy,
           record.Print,
           record.VisitStatus,
-        ].some((v) => {
+        ];
+        const anyData = valuesToCheck.some((v) => {
           if (typeof v === "boolean") return v;
           if (typeof v === "number") return v > 0;
           const s = String(v ?? "").trim();
@@ -464,7 +465,7 @@ const TableRow = memo(
                 onClick={() =>
                   onDeleteRow && onDeleteRow(record.OfficeNo, record.Sr)
                 }
-                className="absolute -top-2 -left-2 z-0 p-0.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 ring-1 ring-red-200 shadow-sm"
+                className="absolute -top-2 -left-2 z-10 p-0.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 ring-1 ring-red-200 shadow-sm pointer-events-auto"
                 title="Delete blank row"
                 aria-label="Delete row"
               >
@@ -556,6 +557,7 @@ const Excel = () => {
   const [engOptions, setEngOptions] = useState([]);
   const [teOptions, setTeOptions] = useState([]);
   const [ceOptions, setCeOptions] = useState([]);
+  const [recOptions, setRecOptions] = useState([]);
 
   useEffect(() => {
     const unsubs = [];
@@ -576,7 +578,8 @@ const Excel = () => {
     };
     watch("settings/engineers", setEngOptions);
     watch("settings/technical_executives", setTeOptions);
-    watch("settings/case_executives", setCeOptions);
+    watch("settings/business_executives", setCeOptions);
+    watch("settings/received_methods", setRecOptions);
     return () => {
       try {
         unsubs.forEach((u) => u());
@@ -590,8 +593,9 @@ const Excel = () => {
       TechnicalExecutive: teOptions,
       Engineer: engOptions,
       CaseInitiated: ceOptions,
+      ReceivedOn: recOptions,
     }),
-    [dropdownOptions, teOptions, engOptions, ceOptions]
+    [dropdownOptions, teOptions, engOptions, ceOptions, recOptions]
   );
 
   const [records, setRecords] = useState([]);
@@ -625,6 +629,10 @@ const Excel = () => {
   const serverDate = useMemo(
     () => new Date(Date.now() + serverOffset),
     [serverOffset, clock]
+  );
+  const serverMonth = useMemo(
+    () => monthOptions[serverDate.getMonth()],
+    [serverDate]
   );
   const yearPair = useMemo(() => getYearPair(serverDate), [serverDate]);
   const displayDate = useMemo(() => {
@@ -664,7 +672,6 @@ const Excel = () => {
   );
   const requiredFields = useMemo(
     () => [
-      "Month",
       "OfficeNo",
       "VisitDate",
       "ReportDate",
@@ -810,6 +817,7 @@ const Excel = () => {
               Location: loc,
               Sr: "1",
               globalIndex: -1,
+              Month: data.Month || serverMonth,
               committedRefNo: data.committedRefNo,
             })
           );
@@ -821,7 +829,7 @@ const Excel = () => {
               globalSr: "",
               OfficeNo: officeNo,
               RefNo: "",
-              Month: "",
+              Month: serverMonth,
               VisitDate: "",
               ReportDate: "",
               TechnicalExecutive: "",
@@ -858,7 +866,7 @@ const Excel = () => {
         u();
       } catch {}
     };
-  }, [selectedLocation, dateFilter, yearPair, isYmdSunday]);
+  }, [selectedLocation, dateFilter, yearPair, isYmdSunday, serverMonth]);
 
   const recomputeTotals = (rec) => {
     const amount = Math.max(0, Number(rec.Amount) || 0);
@@ -888,7 +896,6 @@ const Excel = () => {
 
   const delCheckFields = useMemo(
     () => [
-      "Month",
       "VisitDate",
       "ReportDate",
       "TechnicalExecutive",
@@ -918,6 +925,7 @@ const Excel = () => {
       return delCheckFields.every((f) => {
         const v = rec[f];
         if (typeof v === "boolean") return v === false;
+        if (typeof v === "number") return v === 0;
         if (f === "GST") return v === 0 || String(v ?? "").trim() === "";
         return String(v ?? "").trim() === "";
       });
@@ -927,19 +935,12 @@ const Excel = () => {
 
   const [validationMap, setValidationMap] = useState({});
 
-  const formatRefDisplay = useCallback(
-    (rec) => {
-      if (!rec || !isRecordComplete(rec)) return "";
-      const no = rec.RefNo || rec.committedRefNo;
-      if (!no) return "";
-      const yp = yearPairForRecord(rec);
-      const loc = rec.Location === "PCMC" ? "Pune" : rec.Location;
-      const short = shortOf(loc);
-      const num = String(no).toString().padStart(3, "0");
-      return `DVM/${short}/${yp}_${num}`;
-    },
-    [yearPairForRecord, isRecordComplete]
-  );
+  const formatRefDisplay = useCallback((rec) => {
+    const no = (rec && (rec.RefNo || rec.committedRefNo)) || "";
+    if (!no) return "";
+    const num = String(no).toString().padStart(3, "0");
+    return num;
+  }, []);
 
   useEffect(() => {
     const unsub = onValue(
@@ -1125,6 +1126,7 @@ const Excel = () => {
         } else if (field === "GST") rec.GST = value === "" ? "" : Number(value);
         else rec[field] = value;
         rec = recomputeTotals(rec);
+        if (!rec.Month) rec.Month = serverMonth;
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
           const locName = rec.Location === "PCMC" ? "Pune" : rec.Location;
           const yp = yearPairForRecord(rec);
@@ -1168,6 +1170,7 @@ const Excel = () => {
       isRecordComplete,
       yearPairForRecord,
       getMissingFields,
+      serverMonth,
     ]
   );
 
@@ -1186,6 +1189,7 @@ const Excel = () => {
         } else if (field === "GST") rec.GST = value === "" ? "" : Number(value);
         else rec[field] = value;
         rec = recomputeTotals(rec);
+        if (!rec.Month) rec.Month = serverMonth;
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
           const locName = rec.Location === "PCMC" ? "Pune" : rec.Location;
           const yp = yearPairFromDate(dateFilter) || yearPair;
@@ -1195,7 +1199,7 @@ const Excel = () => {
         return rec;
       });
     },
-    [dateFilter, yearPair]
+    [dateFilter, yearPair, serverMonth]
   );
 
   const handleAddRecord = useCallback(
@@ -1219,7 +1223,7 @@ const Excel = () => {
           globalSr: "",
           OfficeNo,
           RefNo: "",
-          Month: "",
+          Month: serverMonth,
           VisitDate: "",
           ReportDate: "",
           TechnicalExecutive: "",
@@ -1262,7 +1266,7 @@ const Excel = () => {
         }
       }, 100);
     },
-    [yearPair, dateFilter, serverDate]
+    [yearPair, dateFilter, serverDate, serverMonth]
   );
 
   const saveRecords = useCallback(
@@ -1560,7 +1564,7 @@ const Excel = () => {
       globalSr: "",
       OfficeNo: officeNo,
       RefNo: "",
-      Month: "",
+      Month: serverMonth,
       VisitDate: "",
       ReportDate: "",
       TechnicalExecutive: "",
@@ -1652,7 +1656,10 @@ const Excel = () => {
       const data = list.map((r, i) => ({
         Sr: selectedLocation ? r.Sr : (i + 1).toString(),
         Month: r.Month,
-        Office: r.Location === "PCMC" ? "Pune" : r.Location,
+        Office: (() => {
+          const loc = r.Location === "PCMC" ? "Pune" : r.Location;
+          return `DVM/${shortOf(loc)}/${yearPair}`;
+        })(),
         "Ref No": formatRefDisplay(r),
         "Visit Date": toDisplayDate(r.VisitDate),
         "Report Date": toDisplayDate(r.ReportDate),
@@ -1717,9 +1724,9 @@ const Excel = () => {
           <SearchActionsCard
             title="Search & Actions"
             recordsCount={filtered.length}
-            contentClassName="flex items-end gap-3 flex-nowrap"
+            contentClassName="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3"
             rightPrimary={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   title="Add Data"
@@ -1859,13 +1866,13 @@ const Excel = () => {
                 maxHeight: scrollMaxHeight ? `${scrollMaxHeight}px` : undefined,
               }}
             >
-              <table className="w-full border-collapse text-sm">
+              <table className="w-full border-collapse text-xs sm:text-sm">
                 <thead className="bg-indigo-600 text-white sticky top-0 z-30">
                   <tr>
                     {headers.map((h) => (
                       <th
                         key={h}
-                        className={`px-2 py-3 text-center font-bold border border-gray-200 whitespace-nowrap ${minw(
+                        className={`px-2 py-2 sm:py-3 text-center font-bold border border-gray-200 whitespace-nowrap ${minw(
                           h
                         )}`}
                       >
@@ -1971,6 +1978,8 @@ const Excel = () => {
                                 message: "Row deleted",
                               });
                             }}
+                            serverMonth={serverMonth}
+                            serverYearPair={yearPair}
                           />
                         );
                       })
@@ -2020,6 +2029,8 @@ const Excel = () => {
                                     message: "Row deleted",
                                   });
                                 }}
+                                serverMonth={serverMonth}
+                                serverYearPair={yearPair}
                               />
                             );
                           })

@@ -7,7 +7,8 @@ const Settings = () => {
   const items = [
     { key: 'engineers', title: 'Engineers' },
     { key: 'technical_executives', title: 'Technical Executives' },
-    { key: 'case_executives', title: 'Case Executives' },
+    { key: 'business_executives', title: 'Business Executives' },
+    { key: 'received_methods', title: 'Received Methods' },
     { key: 'branches', title: 'Branches' },
   ]
 
@@ -45,7 +46,11 @@ const Settings = () => {
     let key = nm.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || String(Date.now())
     if (rows.some(r => r.key === key)) key = key + '-' + Date.now()
     const value = { name: nm, createdAt: Date.now() }
-    await set(ref(db, `settings/${selected}/${key}`), value)
+    if (selected === 'business_executives') {
+      await set(ref(db, `settings/business_executives/${key}`), value)
+    } else {
+      await set(ref(db, `settings/${selected}/${key}`), value)
+    }
     closeAdd()
   }
 
@@ -68,17 +73,17 @@ const Settings = () => {
         <h2 className="text-3xl font-bold text-gray-800">Settings</h2>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
         {items.map((it) => (
           <button
             key={it.key}
             type="button"
             onClick={() => setSelected(it.key)}
-            className={`group text-left p-6 rounded-xl border ${selected===it.key?'border-indigo-400 ring-1 ring-indigo-200':'border-gray-200'} bg-white hover:border-indigo-300 hover:shadow-md transition`}
+            className={`group text-left p-4 rounded-xl border ${selected===it.key?'border-indigo-400 ring-1 ring-indigo-200':'border-gray-200'} bg-white hover:border-indigo-300 hover:shadow-md transition h-full`}
           >
             <div className="flex items-center gap-3 mb-2">
               <FiUserPlus className="text-xl text-indigo-600" />
-              <div className="text-lg font-semibold text-gray-800">{it.title}</div>
+              <div className="text-lg font-semibold text-gray-800 whitespace-nowrap">{it.title}</div>
             </div>
             <div className="text-sm text-gray-600">Manage {it.title.toLowerCase()}</div>
           </button>
@@ -96,7 +101,7 @@ const Settings = () => {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-xs sm:text-sm border-collapse">
             <thead className="bg-indigo-600 text-white">
               <tr>
                 <th className="px-3 py-2 text-center font-semibold border border-indigo-500">Sr No</th>
@@ -218,7 +223,11 @@ const Settings = () => {
               try {
                 edit.saving = true
                 const value = { name: nm, createdAt: edit.row.createdAt || Date.now() }
-                await set(ref(db, `settings/${selected}/${edit.row.key}`), value)
+                if (selected === 'business_executives') {
+                  await set(ref(db, `settings/business_executives/${edit.row.key}`), value)
+                } else {
+                  await set(ref(db, `settings/${selected}/${edit.row.key}`), value)
+                }
                 setEdit({ open: false, row: null, saving: false })
               } catch {
                 setEdit(prev => ({ ...prev, saving: false }))
@@ -259,7 +268,13 @@ const Settings = () => {
               <button
                 type="button"
                 onClick={async ()=>{
-                  try { await remove(ref(db, `settings/${selected}/${confirm.key}`)) } catch {}
+                  try {
+                    if (selected === 'business_executives') {
+                      await remove(ref(db, `settings/business_executives/${confirm.key}`))
+                    } else {
+                      await remove(ref(db, `settings/${selected}/${confirm.key}`))
+                    }
+                  } catch {}
                   setConfirm({ open:false, key:'', name:'' })
                 }}
                 className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"

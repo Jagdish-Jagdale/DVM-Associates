@@ -197,9 +197,12 @@ const SuperAdminDashboard = () => {
     <div className="min-h-screen bg-[#f0f4f8] p-4 flex justify-center">
       <div className="w-full max-w-6xl">
         <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-4xl font-bold text-gray-800">Super Admin Dashboard</h2>
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800">Super Admin Dashboard</h2>
+              <p className="mt-1 text-gray-600 text-base">Manage Excel records, track pending entries, and oversee admins, executives, and branches from a unified control panel.</p>
+            </div>
+            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto sm:justify-end">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
@@ -224,7 +227,7 @@ const SuperAdminDashboard = () => {
               />
             </div>
           </div>
-          <div className="mt-3 border-t border-gray-200" />
+          <div className="mt-3 border-t border-gray-300" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">

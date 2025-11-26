@@ -222,6 +222,9 @@ const TableRow = memo(
     showDelete,
     onDeleteRow,
     readOnlyRow,
+    serverMonth,
+    serverYearPair,
+    isComplete,
   }) => {
     const isNoFee = record.ReceivedOn === "No Fee";
     const rowClass = isNoFee
@@ -327,27 +330,14 @@ const TableRow = memo(
         );
       }
       if (field === "Month") {
-        const val = record.Month || "";
-        const inOpts = monthOptions.includes(val);
+        const display = record.Month || serverMonth || "";
         return (
-          <select
-            value={val}
-            onChange={(e) =>
-              onChangeField(record.globalIndex, "Month", e.target.value)
-            }
-            disabled={readOnlyRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
-          >
-            <option value="">Select Month</option>
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-            {!inOpts && val && (
-              <option value={val}>{monthAbbrFromAny(val)}</option>
-            )}
-          </select>
+          <input
+            type="text"
+            value={display}
+            readOnly
+            className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100${err}`}
+          />
         );
       }
       if (["ReportStatus", "BillStatus"].includes(field)) {
@@ -393,46 +383,34 @@ const TableRow = memo(
         );
       }
       if (field === "ReceivedOn") {
-        if (record.Location === "Sangli") {
-          return (
-            <select
-              value={record[field] || ""}
-              onChange={(e) =>
-                onChangeField(record.globalIndex, field, e.target.value)
-              }
-              disabled={readOnlyRow}
-              className={`w-full p-2 border border-gray-300 rounded text-sm bg-white`}
-            >
-              <option value="">
-                Select {field.replace(/([A-Z])/g, " $1").trim()}
-              </option>
-              {dropdownOptions[field].map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          );
-        }
         return (
-          <input
-            type="text"
+          <select
             value={record[field] || ""}
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
-            readOnly={readOnlyRow}
+            disabled={readOnlyRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-white`}
-          />
+          >
+            <option value="">Select Received On</option>
+            {(dropdownOptions[field] || []).map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
         );
       }
       if (field === "OfficeNo") {
-        const display =
-          (record.Location === "PCMC" ? "Pune" : record.Location) || "";
+        const locName = record.Location === "PCMC" ? "Pune" : record.Location;
+        const short =
+          (defaultLocations.find((l) => l.name === locName) || {}).shortForm ||
+          "SNGL";
+        const office = `DVM/${short}/${serverYearPair || getYearPair()}`;
         return (
           <input
             type="text"
-            value={display}
+            value={office}
             readOnly
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`}
           />
@@ -441,47 +419,15 @@ const TableRow = memo(
       if (field === "Sr") {
         const isReservedTop = record.globalIndex === -1;
         const showReserved = isReservedTop || !!record.reservedFirst;
-        const anyData = [
-          record.Month,
-          record.VisitDate,
-          record.ReportDate,
-          record.TechnicalExecutive,
-          record.Bank,
-          record.Branch,
-          record.ClientName,
-          record.ClientContactNo,
-          record.Locations,
-          record.CaseInitiated,
-          record.Engineer,
-          record.ReportStatus,
-          record.BillStatus,
-          record.ReceivedOn,
-          record.RecdDate,
-          record.GSTNo,
-          record.Remark,
-          record.Amount,
-          record.GST,
-          record.Total,
-          record.SoftCopy,
-          record.Print,
-          record.VisitStatus,
-        ].some((v) => {
-          if (typeof v === "boolean") return v;
-          if (typeof v === "number") return v > 0;
-          const s = String(v ?? "").trim();
-          if (s === "" || s === "0" || s === "0.0" || s === "0.00")
-            return false;
-          return true;
-        });
         const borderCls = showReserved
-          ? anyData
+          ? isComplete
             ? "border-green-500"
             : "border-red-500"
           : "";
         const titleText = showReserved
-          ? anyData
-            ? "Reserved row has data"
-            : "Reserved row empty"
+          ? isComplete
+            ? "Reserved row complete"
+            : "Reserved row incomplete"
           : "";
         return (
           <div
@@ -589,6 +535,7 @@ const Excel = () => {
   const [engOptions, setEngOptions] = useState([]);
   const [teOptions, setTeOptions] = useState([]);
   const [ceOptions, setCeOptions] = useState([]);
+  const [recOptions, setRecOptions] = useState([]);
 
   useEffect(() => {
     const unsubs = [];
@@ -609,7 +556,8 @@ const Excel = () => {
     };
     watch("settings/engineers", setEngOptions);
     watch("settings/technical_executives", setTeOptions);
-    watch("settings/case_executives", setCeOptions);
+    watch("settings/business_executives", setCeOptions);
+    watch("settings/received_methods", setRecOptions);
     return () => {
       try {
         unsubs.forEach((u) => u());
@@ -623,8 +571,9 @@ const Excel = () => {
       TechnicalExecutive: teOptions,
       Engineer: engOptions,
       CaseInitiated: ceOptions,
+      ReceivedOn: recOptions,
     }),
-    [dropdownOptions, teOptions, engOptions, ceOptions]
+    [dropdownOptions, teOptions, engOptions, ceOptions, recOptions]
   );
 
   const [records, setRecords] = useState([]);
@@ -658,6 +607,10 @@ const Excel = () => {
   const serverDate = useMemo(
     () => new Date(Date.now() + serverOffset),
     [serverOffset, clock]
+  );
+  const serverMonth = useMemo(
+    () => monthOptions[serverDate.getMonth()],
+    [serverDate]
   );
   const yearPair = useMemo(() => getYearPair(serverDate), [serverDate]);
   const displayDate = useMemo(() => {
@@ -694,7 +647,7 @@ const Excel = () => {
     (rec) => {
       return yearPair;
     },
-    [yearPair]
+    [yearPair, serverMonth]
   );
   const [confirmState, setConfirmState] = useState({
     open: false,
@@ -846,8 +799,6 @@ const Excel = () => {
 
   const requiredFields = useMemo(
     () => [
-      "Month",
-      "OfficeNo",
       "VisitDate",
       "ReportDate",
       "TechnicalExecutive",
@@ -871,7 +822,6 @@ const Excel = () => {
 
   const delCheckFields = useMemo(
     () => [
-      "Month",
       "VisitDate",
       "ReportDate",
       "TechnicalExecutive",
@@ -924,16 +874,12 @@ const Excel = () => {
 
   const formatRefDisplay = useCallback(
     (rec) => {
-      if (!rec || !isRecordComplete(rec)) return "";
-      const refStr = rec.RefNo || rec.committedRefNo;
+      const refStr = (rec && (rec.RefNo || rec.committedRefNo)) || "";
       if (!refStr) return "";
-      const loc = rec.Location === "PCMC" ? "Pune" : rec.Location;
-      const short = shortOf(loc);
-      const yp = yearPairFromOffice(rec.OfficeNo) || yearPairForRecord(rec);
       const num = String(refStr).toString().padStart(3, "0");
-      return yp ? `DVM/${short}/${yp}_${num}` : num;
+      return num;
     },
-    [yearPairForRecord, isRecordComplete]
+    []
   );
 
   useEffect(() => {
@@ -954,7 +900,7 @@ const Excel = () => {
             globalSr: "",
             OfficeNo: data[k].OfficeNo || "",
             RefNo: refNo,
-            Month: data[k].Month || "",
+            Month: data[k].Month || serverMonth,
             VisitDate: data[k].VisitDate || "",
             ReportDate: data[k].ReportDate || "",
             TechnicalExecutive: data[k].TechnicalExecutive || "",
@@ -1030,7 +976,7 @@ const Excel = () => {
       }
     );
     return () => unsub();
-  }, [allowedLocations]);
+  }, [allowedLocations, serverMonth]);
   const generateRefNo = useCallback(async () => {
     const snap = await get(ref(db, "excel_records"));
     const keys = Object.keys(snap.val() || {});
@@ -1133,6 +1079,7 @@ const Excel = () => {
         } else if (field === "GST") rec.GST = value === "" ? "" : Number(value);
         else rec[field] = value;
         rec = recomputeTotals(rec);
+        if (!rec.Month) rec.Month = serverMonth;
         // Keep OfficeNo in sync with current Location and year pair when relevant fields change
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
           const locName = rec.Location === "PCMC" ? "Pune" : rec.Location;
@@ -1179,6 +1126,7 @@ const Excel = () => {
       isRecordComplete,
       yearPairForRecord,
       getMissingFields,
+      serverMonth,
     ]
   );
 
@@ -1203,7 +1151,7 @@ const Excel = () => {
           globalSr: "",
           OfficeNo,
           RefNo: "",
-          Month: "",
+          Month: serverMonth,
           VisitDate: "",
           ReportDate: "",
           TechnicalExecutive: "",
@@ -1505,7 +1453,7 @@ try {
       globalSr: "",
       OfficeNo: officeNo,
       RefNo: "",
-      Month: "",
+      Month: serverMonth,
       VisitDate: "",
       ReportDate: "",
       TechnicalExecutive: "",
@@ -1539,6 +1487,7 @@ try {
     yearPair,
     reservedRow,
     isYmdSunday,
+    serverDate,
   ]);
 
   useEffect(() => {
@@ -1584,8 +1533,14 @@ try {
       const data = list.map((r, i) => ({
         Sr: selectedLocation ? r.Sr : (i + 1).toString(),
         Month: r.Month,
-        Office: r.Location === "PCMC" ? "Pune" : r.Location,
-        "Ref No": formatRefDisplay(r),
+        Office: (() => {
+          const loc = r.Location === "PCMC" ? "Pune" : r.Location;
+          return `DVM/${shortOf(loc)}/${yearPair}`;
+        })(),
+        "Ref No": (() => {
+          const refStr = r.RefNo || r.committedRefNo || "";
+          return refStr ? String(refStr).padStart(3, "0") : "";
+        })(),
         "Visit Date": toDisplayDate(r.VisitDate),
         "Report Date": toDisplayDate(r.ReportDate),
         "Technical Executive": r.TechnicalExecutive || "",
@@ -1654,9 +1609,9 @@ try {
           <SearchActionsCard
             title="Search & Actions"
             recordsCount={filtered.length}
-            contentClassName="flex items-end gap-3 flex-nowrap"
+            contentClassName="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3"
             rightPrimary={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   title="Add Data"
@@ -1780,13 +1735,13 @@ try {
               maxHeight: scrollMaxHeight ? `${scrollMaxHeight}px` : undefined,
             }}
           >
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-xs sm:text-sm">
               <thead className="bg-indigo-600 text-white sticky top-0 z-30">
                 <tr>
                   {headers.map((h) => (
                     <th
                       key={h}
-                      className={`px-2 py-3 text-center font-bold border border-gray-200 whitespace-nowrap ${minw(
+                      className={`px-2 py-2 sm:py-3 text-center font-bold border border-gray-200 whitespace-nowrap ${minw(
                         h
                       )}`}
                     >
@@ -1874,6 +1829,9 @@ try {
                         showDelete={showDelete}
                         onDeleteRow={handleDeleteByOffice}
                         readOnlyRow={isSynthetic}
+                        serverMonth={serverMonth}
+                        serverYearPair={yearPair}
+                        isComplete={isRecordComplete(rec)}
                       />
                     );
                   })
