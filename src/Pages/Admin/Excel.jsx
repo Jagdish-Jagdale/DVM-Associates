@@ -20,6 +20,7 @@ import {
   FiTrash2,
   FiSearch,
   FiAlertTriangle,
+  FiStar,
 } from "react-icons/fi";
 import PageHeader from "../../Components/UI/PageHeader.jsx";
 import SearchActionsCard from "../../Components/UI/SearchActionsCard.jsx";
@@ -429,6 +430,8 @@ const TableRow = memo(
             ? "Reserved row complete"
             : "Reserved row incomplete"
           : "";
+        const bySuper = String(record.createdByRole || "").toLowerCase() === "superadmin";
+        const showStar = bySuper || !!record.reservedFirst;
         return (
           <div
             className={`relative ${
@@ -436,6 +439,9 @@ const TableRow = memo(
             }`}
             title={titleText}
           >
+            {showStar && (
+              <FiStar className="absolute top-0 left-0 z-10 text-amber-500 text-[10px]" />
+            )}
             {showDelete && (
               <button
                 type="button"
@@ -925,6 +931,7 @@ const Excel = () => {
             Remark: data[k].Remark || "",
             createdAt: data[k].createdAt || "",
             reservedFirst: !!data[k].reservedFirst,
+            createdByRole: data[k].createdByRole || "",
           };
           out.push(recomputeTotals(base));
         });

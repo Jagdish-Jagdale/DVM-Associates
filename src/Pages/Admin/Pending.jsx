@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, memo, useCallback } from "react";
 import { ref, onValue } from "firebase/database";
 import { db } from "../../../firebase.js";
 import * as XLSX from "xlsx";
-import { FiDownload, FiSearch } from "react-icons/fi";
+import { FiDownload, FiSearch, FiStar } from "react-icons/fi";
 import PageHeader from "../../Components/UI/PageHeader.jsx";
 import SearchActionsCard from "../../Components/UI/SearchActionsCard.jsx";
 import DatePicker from "../../Components/UI/DatePicker.jsx";
@@ -272,6 +272,13 @@ const TableRow = memo(
                     }`}
                     title={titleText}
                   >
+                    {(() => {
+                      const bySuper = String(localRecord.createdByRole || "").toLowerCase() === "superadmin";
+                      const showStar = bySuper || !!localRecord.reservedFirst;
+                      return showStar ? (
+                        <FiStar className="absolute top-0 left-0 z-10 text-amber-500 text-[10px]" />
+                      ) : null;
+                    })()}
                     <input
                       type="text"
                       id={`text-${field}-${record.globalIndex}`}
@@ -527,6 +534,7 @@ const Pending = () => {
             Location: loc,
             reservedFirst: !!rec.reservedFirst,
             createdAt: rec.createdAt || "",
+            createdByRole: rec.createdByRole || "",
           };
           out.push(base);
         });

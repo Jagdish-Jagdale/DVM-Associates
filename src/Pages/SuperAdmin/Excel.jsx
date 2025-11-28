@@ -20,6 +20,7 @@ import {
   FiTrash2,
   FiSearch,
   FiAlertTriangle,
+  FiStar,
 } from "react-icons/fi";
 import PageHeader from "../../Components/UI/PageHeader.jsx";
 import SearchActionsCard from "../../Components/UI/SearchActionsCard.jsx";
@@ -442,6 +443,8 @@ const TableRow = memo(
             return false;
           return true;
         });
+        const bySuper = String(record.createdByRole || "").toLowerCase() === "superadmin";
+        const showStar = bySuper || !!record.reservedFirst;
         const borderCls = showReserved
           ? anyData
             ? "border-green-500"
@@ -459,6 +462,9 @@ const TableRow = memo(
             }`}
             title={titleText}
           >
+            {showStar && (
+              <FiStar className="absolute top-0 left-0 z-10 text-amber-500 text-[10px]" />
+            )}
             {showDelete && (
               <button
                 type="button"
@@ -805,68 +811,72 @@ const Excel = () => {
       return;
     }
     const loc = selectedLocation === "PCMC" ? "Pune" : selectedLocation;
-    const path = `reserved_rows/${dateFilter}/${loc}`;
-    const u = onValue(
-      ref(db, path),
-      (snap) => {
-        const data = snap.val();
-        if (data) {
-          setReservedRow(
-            recomputeTotals({
-              ...data,
-              Location: loc,
-              Sr: "1",
-              globalIndex: -1,
-              Month: data.Month || serverMonth,
-              committedRefNo: data.committedRefNo,
-            })
-          );
-        } else {
-          const officeNo = `DVM/${shortOf(loc)}/${yearPair}`;
-          setReservedRow(
-            recomputeTotals({
-              Sr: "1",
-              globalSr: "",
-              OfficeNo: officeNo,
-              RefNo: "",
-              Month: serverMonth,
-              VisitDate: "",
-              ReportDate: "",
-              TechnicalExecutive: "",
-              Bank: "",
-              Branch: "",
-              ClientName: "",
-              ClientContactNo: "",
-              Locations: "",
-              Location: loc,
-              CaseInitiated: "",
-              Engineer: "",
-              VisitStatus: false,
-              ReportStatus: "",
-              SoftCopy: false,
-              Print: false,
-              Amount: "",
-              GST: 0,
-              BillStatus: "",
-              ReceivedOn: "",
-              RecdDate: "",
-              GSTNo: "",
-              Remark: "",
-              createdAt: dateFilter,
-              globalIndex: -1,
-              committedRefNo: "",
-            })
-          );
-        }
-      },
-      () => setReservedRow(null)
-    );
-    return () => {
-      try {
-        u();
-      } catch {}
-    };
-  }, [selectedLocation, dateFilter, yearPair, isYmdSunday, serverMonth]);
+    // Try to find an existing reserved-first record in excel_records for this date and location
+    const found = records.find((r) => {
+      const locMatch = (r.Location === "PCMC" ? "Pune" : r.Location) === loc;
+      if (!locMatch) return false;
+      const s2 = String(r.createdAt || "").trim();
+      const iso2 = /^\d{4}-\d{2}-\d{2}$/.test(s2)
+        ? s2
+        : (function () {
+            if (!s2) return "";
+            const d = new Date(s2);
+            if (isNaN(d.getTime())) return "";
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            return `${yyyy}-${mm}-${dd}`;
+          })();
+      return r.reservedFirst && iso2 === dateFilter;
+    });
+    if (found) {
+      setReservedRow(
+        recomputeTotals({
+          ...found,
+          Sr: "1",
+          globalIndex: -1,
+          Month: found.Month || serverMonth,
+          committedRefNo: found.committedRefNo || found.RefNo || "",
+        })
+      );
+    } else {
+      const officeNo = `DVM/${shortOf(loc)}/${yearPair}`;
+      setReservedRow(
+        recomputeTotals({
+          Sr: "1",
+          globalSr: "",
+          OfficeNo: officeNo,
+          RefNo: "",
+          Month: serverMonth,
+          VisitDate: "",
+          ReportDate: "",
+          TechnicalExecutive: "",
+          Bank: "",
+          Branch: "",
+          ClientName: "",
+          ClientContactNo: "",
+          Locations: "",
+          Location: loc,
+          CaseInitiated: "",
+          Engineer: "",
+          VisitStatus: false,
+          ReportStatus: "",
+          SoftCopy: false,
+          Print: false,
+          Amount: "",
+          GST: 0,
+          BillStatus: "",
+          ReceivedOn: "",
+          RecdDate: "",
+          GSTNo: "",
+          Remark: "",
+          createdAt: dateFilter,
+          globalIndex: -1,
+          committedRefNo: "",
+        })
+      );
+    }
+  }, [selectedLocation, dateFilter, yearPair, isYmdSunday, serverMonth, records]);
 
   const recomputeTotals = (rec) => {
     const amount = Math.max(0, Number(rec.Amount) || 0);
@@ -985,6 +995,9 @@ const Excel = () => {
             Remark: data[k].Remark || "",
             createdAt: data[k].createdAt || "",
             reservedFirst: !!data[k].reservedFirst,
+            createdByRole: data[k].createdByRole || "",
+            createdBy: data[k].createdBy || "",
+            created_by: data[k].created_by || "",
           };
           out.push(recomputeTotals(base));
         });
@@ -1294,6 +1307,15 @@ const Excel = () => {
         }
       });
 
+      const reservedYP = dateFilter ? yearPairFromDate(dateFilter) : "";
+      if (reservedRow?.committedRefNo) {
+        const nn = parseInt(reservedRow.committedRefNo, 10);
+        if (!isNaN(nn)) {
+          if (!usedByYP.has(reservedYP)) usedByYP.set(reservedYP, new Set());
+          usedByYP.get(reservedYP).add(nn);
+        }
+      }
+
       const assignedInBatch = new Map();
       const enriched = complete.map((r) => {
         const yp = yearPairForRecord(r);
@@ -1322,6 +1344,7 @@ const Excel = () => {
           Total: (amt + gst).toFixed(2),
           Location: loc,
           createdAt: created,
+          createdByRole: r.__local && !r.createdByRole ? "SuperAdmin" : (r.createdByRole || ""),
         };
       });
 
@@ -1443,14 +1466,29 @@ const Excel = () => {
       if (!committed) {
         committed = await getNextRefNoForYP(yp);
       }
+      const amt = Math.max(0, Number(reservedRow.Amount) || 0);
+      const gst = Number((amt * 0.18).toFixed(2));
       const data = {
         ...reservedRow,
         OfficeNo: `DVM/${shortOf(locName)}/${yp}`,
+        RefNo: committed,
         committedRefNo: committed,
+        Amount: amt,
+        GST: gst,
+        Total: (amt + gst).toFixed(2),
+        Location: locName,
         createdAt: dateFilter,
+        reservedFirst: true,
+        createdByRole: "SuperAdmin",
         __dirty: false,
       };
-      await set(ref(db, `reserved_rows/${dateFilter}/${locName}`), data);
+      const key = `DVM-${shortOf(locName)}-${yp}-${committed}`;
+      await set(ref(db, `excel_records/${key}`), {
+        ...data,
+        VisitStatus: !!data.VisitStatus,
+        SoftCopy: !!data.SoftCopy,
+        Print: !!data.Print,
+      });
       setReservedRow(recomputeTotals(data));
       return true;
     } catch (e) {
