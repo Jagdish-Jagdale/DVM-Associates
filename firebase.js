@@ -5,15 +5,18 @@ import { getDatabase } from "firebase/database";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
+
 const firebaseConfig = {
-  apiKey: "AIzaSyASxYJQju6A3PQA8f2nWrpl6SAJtXhIYFU",
-  authDomain: "dvmassociation-98855.firebaseapp.com",
-  projectId: "dvmassociation-98855",
-  storageBucket: "dvmassociation-98855.firebasestorage.app",
-  messagingSenderId: "151716602982",
-  appId: "1:151716602982:web:d33e447a920b0746ec39a7"
+  apiKey: "AIzaSyAuC55gJgvyOQKCgOkYEyCvTC6v6czEbCE",
+  authDomain: "dvm-associate.firebaseapp.com",
+  databaseURL: "https://dvm-associate-default-rtdb.firebaseio.com",
+  projectId: "dvm-associate",
+  storageBucket: "dvm-associate.firebasestorage.app",
+  messagingSenderId: "277880252870",
+  appId: "1:277880252870:web:8dc6551c2bfdce2d4beac7",
+  measurementId: "G-FYHX213671"
 };
+
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

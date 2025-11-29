@@ -83,6 +83,7 @@ const headers = [
   "CaseInitiated",
   "Engineer",
   "VisitStatus",
+  "FMV",
   "ReportStatus",
   "SoftCopy",
   "Print",
@@ -283,6 +284,25 @@ const TableRow = memo(
             }
             disabled={readOnlyRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm${err}`}
+          />
+        );
+      }
+      if (field === "FMV") {
+        return (
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            inputMode="decimal"
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            value={record[field] === 0 || record[field] ? record[field] : ""}
+            onChange={(e) =>
+              onChangeField(record.globalIndex, field, e.target.value)
+            }
+            disabled={readOnlyRow}
+            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
           />
         );
       }
@@ -521,7 +541,6 @@ const Excel = () => {
         "Done",
         "On hold",
         "Pending",
-        "Tentative",
       ].sort(),
       ReceivedOn: [
         "CBI CC",
@@ -845,6 +864,7 @@ const Excel = () => {
       "GSTNo",
       "Remark",
       "Amount",
+      "FMV",
       "SoftCopy",
       "Print",
       "VisitStatus",
@@ -922,6 +942,7 @@ const Excel = () => {
             ReportStatus: data[k].ReportStatus || "",
             SoftCopy: !!data[k].SoftCopy,
             Print: !!data[k].Print,
+            FMV: Number(data[k].FMV) || 0,
             Amount: Math.max(0, Number(data[k].Amount) || 0),
             GST: Number(data[k].GST) || 0,
             BillStatus: data[k].BillStatus || "",
@@ -1084,6 +1105,13 @@ const Excel = () => {
             rec.Amount = isNaN(n) ? "" : Math.max(0, n);
           }
         } else if (field === "GST") rec.GST = value === "" ? "" : Number(value);
+        else if (field === "FMV") {
+          if (value === "") rec.FMV = "";
+          else {
+            const n = Number(value);
+            rec.FMV = isNaN(n) ? "" : Math.max(0, n);
+          }
+        }
         else rec[field] = value;
         rec = recomputeTotals(rec);
         if (!rec.Month) rec.Month = serverMonth;
@@ -1174,6 +1202,7 @@ const Excel = () => {
           ReportStatus: "",
           SoftCopy: false,
           Print: false,
+          FMV: "",
           Amount: "",
           GST: 0,
           BillStatus: "",
@@ -1254,6 +1283,7 @@ const Excel = () => {
           RefNo: refNoStr,
           OfficeNo: officeNo,
           Amount: amt,
+          FMV: Math.max(0, Number(r.FMV) || 0),
           GST: gst,
           Total: (amt + gst).toFixed(2),
           Location: loc,
@@ -1476,6 +1506,7 @@ try {
       ReportStatus: "",
       SoftCopy: false,
       Print: false,
+      FMV: "",
       Amount: "",
       GST: 0,
       BillStatus: "",
@@ -1559,6 +1590,7 @@ try {
         "Case Initiated": r.CaseInitiated || "",
         Engineer: r.Engineer || "",
         "Visit Status": r.VisitStatus ? "TRUE" : "FALSE",
+        FMV: Number(r.FMV) || 0,
         "Report Status": r.ReportStatus,
         "Soft Copy": r.SoftCopy ? "TRUE" : "FALSE",
         Print: r.Print ? "TRUE" : "FALSE",

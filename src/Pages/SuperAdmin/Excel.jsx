@@ -83,6 +83,7 @@ const headers = [
   "CaseInitiated",
   "Engineer",
   "VisitStatus",
+  "FMV",
   "ReportStatus",
   "SoftCopy",
   "Print",
@@ -279,6 +280,24 @@ const TableRow = memo(
           />
         );
       }
+      if (field === "FMV") {
+        return (
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            inputMode="decimal"
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            value={record[field] === 0 || record[field] ? record[field] : ""}
+            onChange={(e) =>
+              onChangeField(record.globalIndex, field, e.target.value)
+            }
+            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
+          />
+        );
+      }
       if (["Amount", "GST", "Total"].includes(field)) {
         const ro = field === "Total" || field === "GST";
         return (
@@ -434,6 +453,7 @@ const TableRow = memo(
           record.SoftCopy,
           record.Print,
           record.VisitStatus,
+          record.FMV,
         ];
         const anyData = valuesToCheck.some((v) => {
           if (typeof v === "boolean") return v;
@@ -543,7 +563,6 @@ const Excel = () => {
         "Done",
         "On hold",
         "Pending",
-        "Tentative",
       ].sort(),
       ReceivedOn: [
         "CBI CC",
@@ -863,6 +882,7 @@ const Excel = () => {
           ReportStatus: "",
           SoftCopy: false,
           Print: false,
+          FMV: "",
           Amount: "",
           GST: 0,
           BillStatus: "",
@@ -926,6 +946,7 @@ const Excel = () => {
       "SoftCopy",
       "Print",
       "VisitStatus",
+      "FMV",
     ],
     []
   );
@@ -986,6 +1007,7 @@ const Excel = () => {
             ReportStatus: data[k].ReportStatus || "",
             SoftCopy: !!data[k].SoftCopy,
             Print: !!data[k].Print,
+            FMV: Number(data[k].FMV) || 0,
             Amount: Math.max(0, Number(data[k].Amount) || 0),
             GST: Number(data[k].GST) || 0,
             BillStatus: data[k].BillStatus || "",
@@ -1137,7 +1159,13 @@ const Excel = () => {
             rec.Amount = isNaN(n) ? "" : Math.max(0, n);
           }
         } else if (field === "GST") rec.GST = value === "" ? "" : Number(value);
-        else rec[field] = value;
+        else if (field === "FMV") {
+          if (value === "") rec.FMV = "";
+          else {
+            const n = Number(value);
+            rec.FMV = isNaN(n) ? "" : Math.max(0, n);
+          }
+        } else rec[field] = value;
         rec = recomputeTotals(rec);
         if (!rec.Month) rec.Month = serverMonth;
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
@@ -1200,7 +1228,13 @@ const Excel = () => {
             rec.Amount = isNaN(n) ? "" : Math.max(0, n);
           }
         } else if (field === "GST") rec.GST = value === "" ? "" : Number(value);
-        else rec[field] = value;
+        else if (field === "FMV") {
+          if (value === "") rec.FMV = "";
+          else {
+            const n = Number(value);
+            rec.FMV = isNaN(n) ? "" : Math.max(0, n);
+          }
+        } else rec[field] = value;
         rec = recomputeTotals(rec);
         if (!rec.Month) rec.Month = serverMonth;
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
@@ -1259,6 +1293,7 @@ const Excel = () => {
           RecdDate: "",
           GSTNo: "",
           Remark: "",
+          FMV: "",
           createdAt: dateFilter || serverDate.toISOString(),
           __dirty: false,
           __local: true,
@@ -1345,6 +1380,7 @@ const Excel = () => {
           Location: loc,
           createdAt: created,
           createdByRole: r.__local && !r.createdByRole ? "SuperAdmin" : (r.createdByRole || ""),
+          FMV: Math.max(0, Number(r.FMV) || 0),
         };
       });
 
@@ -1416,22 +1452,22 @@ const Excel = () => {
       }
       setIsSaving(true);
       try {
-  await saveRecords(recList);
+        await saveRecords(recList);
 
-  setSuccessSnack({
-    open: true,
-    message: "Records have been successfully saved.",
-  });
-} catch (error) {
-  console.error("Error saving records:", error);
+        setSuccessSnack({
+          open: true,
+          message: "Records have been successfully saved.",
+        });
+      } catch (error) {
+        console.error("Error saving records:", error);
 
-  setErrorSnack({
-    open: true,
-    message: "An error occurred while saving. Please try again.",
-  });
-} finally {
-  setIsSaving(false);
-}
+        setErrorSnack({
+          open: true,
+          message: "An error occurred while saving. Please try again.",
+        });
+      } finally {
+        setIsSaving(false);
+      }
     },
     [saveRecords, isRecordComplete, getMissingFields]
   );
@@ -1473,6 +1509,7 @@ const Excel = () => {
         OfficeNo: `DVM/${shortOf(locName)}/${yp}`,
         RefNo: committed,
         committedRefNo: committed,
+        FMV: Math.max(0, Number(reservedRow.FMV) || 0),
         Amount: amt,
         GST: gst,
         Total: (amt + gst).toFixed(2),
@@ -1625,6 +1662,7 @@ const Excel = () => {
       RecdDate: "",
       GSTNo: "",
       Remark: "",
+      FMV: "",
       createdAt: dateFilter,
       globalIndex: -1,
     });
@@ -1710,6 +1748,7 @@ const Excel = () => {
         "Case Initiated": r.CaseInitiated || "",
         Engineer: r.Engineer || "",
         "Visit Status": r.VisitStatus ? "TRUE" : "FALSE",
+        FMV: Number(r.FMV) || 0,
         "Report Status": r.ReportStatus,
         "Soft Copy": r.SoftCopy ? "TRUE" : "FALSE",
         Print: r.Print ? "TRUE" : "FALSE",
