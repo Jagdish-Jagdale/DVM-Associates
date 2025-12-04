@@ -9,28 +9,7 @@ import DatePicker from "../../Components/UI/DatePicker.jsx";
 import { ThreeDots } from "react-loader-spinner";
 
 const locationBgClass = (loc) => {
-  switch (loc) {
-    case "Sangli":
-      return "bg-blue-50";
-    case "Belgaum":
-      return "bg-blue-50";
-    case "Kolhapur":
-      return "bg-blue-50";
-    case "Pune":
-      return "bg-blue-50";
-    case "Bengaluru":
-      return "bg-blue-50";
-    case "Mumbai":
-      return "bg-blue-50";
-    case "Hyderabad":
-      return "bg-blue-50";
-    case "Indore":
-      return "bg-blue-50";
-    case "Satara":
-      return "bg-blue-50";
-    default:
-      return "bg-white";
-  }
+  return "bg-white";
 };
 
 const minw = (h) => {
@@ -161,7 +140,10 @@ const toDisplayDate = (s) => {
 
 const formatCurrency = (n) => {
   const num = Number(n) || 0;
-  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num);
 };
 
 const TableRow = memo(
@@ -185,7 +167,11 @@ const TableRow = memo(
         {headers.map((field) => (
           <td
             key={field}
-            className={`p-2 border border-gray-300 align-top ${minw(field)}`}
+            className={`p-2 border border-gray-300 ${
+              ["SoftCopy", "Print", "VisitStatus"].includes(field)
+                ? "text-center align-middle"
+                : "align-top"
+            } ${minw(field)}`}
           >
             {field === "SoftCopy" ||
             field === "Print" ||
@@ -196,7 +182,7 @@ const TableRow = memo(
                 name={field}
                 checked={!!localRecord[field]}
                 onChange={(e) => onChange(field, e.target.checked)}
-                className="h-4 w-4"
+                className="h-4 w-4 mx-auto"
                 disabled
               />
             ) : field === "RefNo" ? (
@@ -218,7 +204,9 @@ const TableRow = memo(
                 id={`text-${field}-${record.globalIndex}`}
                 name={field}
                 value={`DVM/${shortOf(
-                  localRecord.Location === "PCMC" ? "Pune" : localRecord.Location
+                  localRecord.Location === "PCMC"
+                    ? "Pune"
+                    : localRecord.Location
                 )}/${getYearPair()}`}
                 readOnly
                 className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`}
@@ -273,7 +261,10 @@ const TableRow = memo(
                     title={titleText}
                   >
                     {(() => {
-                      const bySuper = String(localRecord.createdByRole || "").toLowerCase() === "superadmin";
+                      const bySuper =
+                        String(
+                          localRecord.createdByRole || ""
+                        ).toLowerCase() === "superadmin";
                       const showStar = bySuper || !!localRecord.reservedFirst;
                       return showStar ? (
                         <FiStar className="absolute top-0 left-0 z-10 text-amber-500 text-[10px]" />
@@ -316,7 +307,9 @@ const TableRow = memo(
                 id={`number-${field}-${record.globalIndex}`}
                 name={field}
                 value={
-                  localRecord[field] === "" || localRecord[field] === null || typeof localRecord[field] === "undefined"
+                  localRecord[field] === "" ||
+                  localRecord[field] === null ||
+                  typeof localRecord[field] === "undefined"
                     ? ""
                     : `₹ ${formatCurrency(localRecord[field])}`
                 }
@@ -745,21 +738,29 @@ const Pending = () => {
         <>
           <SearchActionsCard
             recordsCount={displayRecords.length}
+            recordsLabel="Pending Records"
             contentClassName="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3"
             rightPrimary={
               <div className="flex items-center gap-4">
-                <div
-                  className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 h-10 shadow text-sm flex flex-col justify-center relative group"
-                >
-                  <div className="opacity-90 text-[11px] leading-none">Total Pending</div>
+                <div className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 h-10 shadow text-sm flex flex-col justify-center relative group">
+                  <div className="opacity-90 text-[11px] leading-none py-1">
+                    Total Pending Amount
+                  </div>
                   <div
                     className="font-bold text-base leading-tight"
-                    style={{ fontFamily: "'Inter', 'Segoe UI', Roboto, Arial, 'Helvetica Neue', sans-serif" }}
+                    style={{
+                      fontFamily:
+                        "'Inter', 'Segoe UI', Roboto, Arial, 'Helvetica Neue', sans-serif",
+                    }}
                   >
                     <div className="flex items-center gap-1">
                       <span>₹</span>
                       <span
-                        className={totalPendingDigits >= 8 ? "inline-block max-w-[14ch] truncate align-bottom" : ""}
+                        className={
+                          totalPendingDigits >= 8
+                            ? "inline-block max-w-[14ch] truncate align-bottom"
+                            : ""
+                        }
                       >
                         {formattedTotalPending}
                       </span>
@@ -777,8 +778,12 @@ const Pending = () => {
                   className={`h-10 px-4 rounded-md inline-flex items-center gap-2 text-sm ${
                     displayRecords.length === 0
                       ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700"
                   }`}
+                  style={{
+                    fontFamily:
+                      "'Inter', 'Segoe UI', Roboto, Arial, 'Helvetica Neue', sans-serif",
+                  }}
                   title="Download"
                   aria-label="Download"
                 >

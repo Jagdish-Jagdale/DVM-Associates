@@ -8,7 +8,6 @@ import { ThreeDots } from "react-loader-spinner";
 import {
   FiEdit,
   FiTrash2,
-  FiDownload,
   FiChevronLeft,
   FiChevronRight,
   FiArrowUp,
@@ -19,6 +18,7 @@ import {
   FiEyeOff,
   FiAlertTriangle,
 } from "react-icons/fi";
+import { CiExport } from "react-icons/ci";
 import PageHeader from "../../Components/UI/PageHeader.jsx";
 
 const Admins = () => {
@@ -27,7 +27,13 @@ const Admins = () => {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [confirm, setConfirm] = useState({ open: false, mobile: "", name: "", text: "", deleting: false });
+  const [confirm, setConfirm] = useState({
+    open: false,
+    mobile: "",
+    name: "",
+    text: "",
+    deleting: false,
+  });
   const [edit, setEdit] = useState({
     open: false,
     mobile: "",
@@ -58,6 +64,27 @@ const Admins = () => {
     saving: false,
   });
   const [showCreatePwd, setShowCreatePwd] = useState(false);
+
+  const formatDateToDDMMYYYY = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-";
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      let hours = date.getHours();
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const seconds = String(date.getSeconds()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12; // the hour '0' should be '12'
+      const formattedHours = String(hours).padStart(2, "0");
+      return `${day}/${month}/${year} ${formattedHours}:${minutes}:${seconds} ${ampm}`;
+    } catch {
+      return "-";
+    }
+  };
 
   useEffect(() => {
     if (!snack.open) return;
@@ -179,9 +206,23 @@ const Admins = () => {
   };
 
   const openCreate = () =>
-    setCreate({ open: true, name: "", branch: "", mobile: "", password: "", saving: false });
+    setCreate({
+      open: true,
+      name: "",
+      branch: "",
+      mobile: "",
+      password: "",
+      saving: false,
+    });
   const closeCreate = () =>
-    setCreate({ open: false, name: "", branch: "", mobile: "", password: "", saving: false });
+    setCreate({
+      open: false,
+      name: "",
+      branch: "",
+      mobile: "",
+      password: "",
+      saving: false,
+    });
 
   const saveCreate = async (e) => {
     e.preventDefault();
@@ -191,15 +232,27 @@ const Admins = () => {
     const mobile = (create.mobile || "").trim();
     const password = create.password || "";
     if (!name || !branch || !mobile || !password) {
-      setSnack({ open: true, message: "Please fill all fields", type: "error" });
+      setSnack({
+        open: true,
+        message: "Please fill all fields",
+        type: "error",
+      });
       return;
     }
     if (!validateMobile(mobile)) {
-      setSnack({ open: true, message: "Mobile must be 10 digits", type: "error" });
+      setSnack({
+        open: true,
+        message: "Mobile must be 10 digits",
+        type: "error",
+      });
       return;
     }
     if (password.length < 6) {
-      setSnack({ open: true, message: "Password must be at least 6 characters", type: "error" });
+      setSnack({
+        open: true,
+        message: "Password must be at least 6 characters",
+        type: "error",
+      });
       return;
     }
     try {
@@ -209,13 +262,20 @@ const Admins = () => {
       // Check both DB and Auth for duplicates
       const [existing, methods] = await Promise.all([
         get(adminRef),
-        fetchSignInMethodsForEmail(auth, email)
+        fetchSignInMethodsForEmail(auth, email),
       ]);
-      const existsInDB = existing && typeof existing.exists === "function" ? existing.exists() : false;
+      const existsInDB =
+        existing && typeof existing.exists === "function"
+          ? existing.exists()
+          : false;
       const existsInAuth = Array.isArray(methods) ? methods.length > 0 : false;
 
       if (existsInDB || existsInAuth) {
-        setSnack({ open: true, message: "Admin with this mobile number already exists", type: "error" });
+        setSnack({
+          open: true,
+          message: "Admin with this mobile number already exists",
+          type: "error",
+        });
         setCreate((c) => ({ ...c, saving: false }));
         return;
       }
@@ -231,7 +291,11 @@ const Admins = () => {
       setSnack({ open: true, message: "Admin added", type: "success" });
     } catch (err) {
       setCreate((c) => ({ ...c, saving: false }));
-      setSnack({ open: true, message: `Create failed: ${err.message}`, type: "error" });
+      setSnack({
+        open: true,
+        message: `Create failed: ${err.message}`,
+        type: "error",
+      });
     }
   };
 
@@ -287,8 +351,21 @@ const Admins = () => {
   };
 
   const askDelete = (a) =>
-    setConfirm({ open: true, mobile: a.mobile, name: a.name, text: "", deleting: false });
-  const cancelDelete = () => setConfirm({ open: false, mobile: "", name: "", text: "", deleting: false });
+    setConfirm({
+      open: true,
+      mobile: a.mobile,
+      name: a.name,
+      text: "",
+      deleting: false,
+    });
+  const cancelDelete = () =>
+    setConfirm({
+      open: false,
+      mobile: "",
+      name: "",
+      text: "",
+      deleting: false,
+    });
   const doDelete = async () => {
     if (!confirm.mobile || confirm.deleting) return;
     try {
@@ -334,7 +411,7 @@ const Admins = () => {
   };
 
   return (
-    <div className="max-w-[1200px] mx-auto p-4 md:p-6">
+    <div className="w-full min-h-screen p-2 sm:p-4 md:p-6 lg:max-w-[1400px] lg:mx-auto">
       <PageHeader
         title="Admins"
         subtitle="Search, filter, edit and export administrator accounts."
@@ -342,89 +419,99 @@ const Admins = () => {
           <button
             type="button"
             onClick={openCreate}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 text-sm shadow-sm"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md bg-green-600 text-white hover:bg-green-700 text-xs sm:text-sm shadow-sm whitespace-nowrap"
           >
-            <FiPlus className="text-base" />
-            <span>Add Admins</span>
+            <FiPlus className="text-sm sm:text-base" />
+            <span className="hidden xs:inline">Add Admins</span>
+            <span className="xs:hidden">Add</span>
           </button>
         }
       />
-      <div className="mb-4 w-full">
-        <div className="flex flex-wrap items-center gap-3 w-full">
+      <div className="mb-3 sm:mb-4 w-full">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, branch, mobile..."
-            className="flex-1 min-w-[200px] border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Search..."
+            className="flex-1 min-w-0 sm:min-w-[200px] border border-gray-300 rounded-md px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <label className="text-sm text-gray-700">Branch:</label>
-          <select
-            value={branchFilter}
-            onChange={(e) => setBranchFilter(e.target.value)}
-            className="border border-gray-300 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">All Branches</option>
-            {branchOptions.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm text-gray-700 whitespace-nowrap">
+              Branch:
+            </label>
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="flex-1 sm:flex-none border border-gray-300 rounded-md px-2 sm:px-2 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">All</option>
+              {branchOptions.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-            className="inline-flex items-center justify-center p-2 rounded-md border border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            title={`Sort ${sortDir === "asc" ? "ascending" : "descending"}`}
-            aria-label={`Toggle sort direction`}
-          >
-            {sortDir === "asc" ? <FiArrowUp /> : <FiArrowDown />}
-          </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center p-1.5 sm:p-2 rounded-md border border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              title={`Sort ${sortDir === "asc" ? "ascending" : "descending"}`}
+              aria-label="Toggle sort direction"
+            >
+              {sortDir === "asc" ? <FiArrowUp /> : <FiArrowDown />}
+            </button>
 
-          <button
-            type="button"
-            onClick={exportToExcel}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 text-sm shadow-sm"
-          >
-            <FiDownload className="text-base" />
-            <span>Export</span>
-          </button>
+            <button
+              type="button"
+              onClick={exportToExcel}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 text-xs sm:text-sm shadow-sm whitespace-nowrap"
+            >
+              <CiExport
+                className="text-base sm:text-lg"
+                style={{ strokeWidth: 0.5 }}
+              />
+              <span>Export</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center my-4">
+        <div className="flex justify-center my-8 sm:my-12">
           <ThreeDots
-            height="60"
-            width="60"
-            color="#4F46E5" // Indigo color
+            height="50"
+            width="50"
+            color="#4F46E5"
             ariaLabel="loading-indicator"
           />
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
-          <table className="w-full border-collapse text-xs sm:text-sm">
-            <thead className="bg-indigo-600 text-white">
+        <div className="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm -mx-2 sm:mx-0">
+          <table className="w-full border-collapse text-[10px] xs:text-xs sm:text-sm min-w-[640px]">
+            <thead className="bg-indigo-600 text-white sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
-                  Sr No
+                <th className="px-1.5 xs:px-2 sm:px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200 whitespace-nowrap">
+                  Sr
                 </th>
-                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
+                <th className="px-1.5 xs:px-2 sm:px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200 whitespace-nowrap">
                   Name
                 </th>
-                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
+                <th className="px-1.5 xs:px-2 sm:px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200 whitespace-nowrap">
                   Branch
                 </th>
-                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
+                <th className="px-1.5 xs:px-2 sm:px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200 whitespace-nowrap">
                   Mobile
                 </th>
-                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
+                <th className="px-1.5 xs:px-2 sm:px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200 whitespace-nowrap hidden md:table-cell">
                   Role
                 </th>
-                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
+                <th className="px-1.5 xs:px-2 sm:px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200 whitespace-nowrap hidden lg:table-cell">
                   Created
                 </th>
-                <th className="px-3 py-2 sm:py-3 text-left font-semibold border border-gray-200">
+                <th className="px-1.5 xs:px-2 sm:px-3 py-2 sm:py-3 text-center font-semibold border border-gray-200 whitespace-nowrap">
                   Actions
                 </th>
               </tr>
@@ -436,47 +523,53 @@ const Admins = () => {
                     key={a.mobile}
                     className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
                   >
-                    <td className="px-3 py-2 border border-gray-200 align-top">
+                    <td className="px-1.5 xs:px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 align-top">
                       {start + i + 1}
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top">
-                      <div className="max-w-[180px] truncate" title={a.name}>
+                    <td className="px-1.5 xs:px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 align-top">
+                      <div
+                        className="max-w-[80px] xs:max-w-[120px] sm:max-w-[180px] truncate"
+                        title={a.name}
+                      >
                         {a.name}
                       </div>
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top">
-                      {a.branch}
+                    <td className="px-1.5 xs:px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 align-top">
+                      <div
+                        className="max-w-[60px] xs:max-w-[100px] truncate"
+                        title={a.branch}
+                      >
+                        {a.branch}
+                      </div>
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top">
+                    <td className="px-1.5 xs:px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 align-top whitespace-nowrap">
                       {a.mobile}
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top">
+                    <td className="px-1.5 xs:px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 align-top hidden md:table-cell">
                       {a.role}
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top">
-                      {a.createdAt
-                        ? new Date(a.createdAt).toLocaleString()
-                        : "-"}
+                    <td className="px-1.5 xs:px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 align-top hidden lg:table-cell whitespace-nowrap text-xs">
+                      {formatDateToDDMMYYYY(a.createdAt)}
                     </td>
-                    <td className="px-3 py-2 border border-gray-200 align-top">
-                      <div className="flex items-center gap-2">
+                    <td className="px-1.5 xs:px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 align-top">
+                      <div className="flex items-center justify-center gap-1 sm:gap-2">
                         <button
                           type="button"
                           onClick={() => openEdit(a)}
-                          className="p-2 rounded-md bg-amber-500 text-white hover:bg-amber-600"
+                          className="p-1 sm:p-2 rounded-md bg-amber-500 text-white hover:bg-amber-600"
                           title="Edit"
                           aria-label="Edit"
                         >
-                          <FiEdit className="text-base" />
+                          <FiEdit className="text-xs sm:text-base" />
                         </button>
                         <button
                           type="button"
                           onClick={() => askDelete(a)}
-                          className="p-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+                          className="p-1 sm:p-2 rounded-md bg-red-600 text-white hover:bg-red-700"
                           title="Delete"
                           aria-label="Delete"
                         >
-                          <FiTrash2 className="text-base" />
+                          <FiTrash2 className="text-xs sm:text-base" />
                         </button>
                       </div>
                     </td>
@@ -485,8 +578,8 @@ const Admins = () => {
               ) : (
                 <tr>
                   <td
-                    className="px-3 py-4 text-center text-gray-600"
-                    colSpan={6}
+                    className="px-3 py-6 sm:py-8 text-center text-gray-600 text-xs sm:text-sm"
+                    colSpan={7}
                   >
                     No admins found.
                   </td>
@@ -499,15 +592,15 @@ const Admins = () => {
 
       {/* Pagination */}
       {!loading && total > 10 && (
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0 mt-3 sm:mt-4">
+          <div className="text-xs sm:text-sm text-gray-600 order-2 sm:order-1">
             Showing {start + 1}-{Math.min(start + pageSize, total)} of {total}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 order-1 sm:order-2">
             <select
               value={pageSize}
               onChange={(e) => setPageSize(parseInt(e.target.value, 10) || 10)}
-              className="border border-gray-300 rounded px-2 py-1 text-sm"
+              className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
             >
               {[10, 20, 50, 100].map((s) => (
                 <option key={s} value={s}>
@@ -519,30 +612,30 @@ const Admins = () => {
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={current === 1}
-              className={`p-2 rounded-md border ${
+              className={`p-1.5 sm:p-2 rounded-md border ${
                 current === 1
                   ? "text-gray-400 bg-gray-100 cursor-not-allowed"
                   : "text-gray-700 hover:bg-gray-100"
               }`}
               title="Previous"
             >
-              <FiChevronLeft />
+              <FiChevronLeft className="text-sm sm:text-base" />
             </button>
-            <div className="text-sm text-gray-700">
-              Page {current} of {totalPages}
+            <div className="text-xs sm:text-sm text-gray-700 px-2">
+              {current} / {totalPages}
             </div>
             <button
               type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={current === totalPages}
-              className={`p-2 rounded-md border ${
+              className={`p-1.5 sm:p-2 rounded-md border ${
                 current === totalPages
                   ? "text-gray-400 bg-gray-100 cursor-not-allowed"
                   : "text-gray-700 hover:bg-gray-100"
               }`}
               title="Next"
             >
-              <FiChevronRight />
+              <FiChevronRight className="text-sm sm:text-base" />
             </button>
           </div>
         </div>
@@ -550,61 +643,92 @@ const Admins = () => {
 
       {/* Create Admin Modal */}
       {create.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <form onSubmit={saveCreate} className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
+          <form
+            onSubmit={saveCreate}
+            className="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-semibold text-gray-800">Add Admin</h3>
-              <button onClick={closeCreate} type="button" className="p-1 rounded hover:bg-gray-100" aria-label="Close">
+              <button
+                onClick={closeCreate}
+                type="button"
+                className="p-1 rounded hover:bg-gray-100"
+                aria-label="Close"
+              >
                 <FiX />
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name
+                </label>
                 <input
+                  placeholder="Enter admin name"
                   value={create.name}
-                  onChange={(e) => setCreate((c) => ({ ...c, name: e.target.value }))}
+                  onChange={(e) =>
+                    setCreate((c) => ({ ...c, name: e.target.value }))
+                  }
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Branch
+                </label>
                 <select
                   value={create.branch}
-                  onChange={(e) => setCreate((c) => ({ ...c, branch: e.target.value }))}
+                  onChange={(e) =>
+                    setCreate((c) => ({ ...c, branch: e.target.value }))
+                  }
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
                 >
-                  <option value="">Select Branch</option>
+                  <option value="">Select branch</option>
                   {branchOptions.map((b) => (
-                    <option key={b} value={b}>{b}</option>
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mobile
+                </label>
                 <input
+                  placeholder="Enter 10 digit mobile number"
                   value={create.mobile}
                   onChange={(e) => {
-                    const digits = (e.target.value || "").replace(/\D/g, "").slice(0, 10);
+                    const digits = (e.target.value || "")
+                      .replace(/\D/g, "")
+                      .slice(0, 10);
                     setCreate((c) => ({ ...c, mobile: digits }));
                   }}
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   maxLength={10}
                   inputMode="numeric"
                   pattern="[0-9]{10}"
-                  onKeyDown={(e) => { if (["e","E","+","-","."," "].includes(e.key)) e.preventDefault(); }}
+                  onKeyDown={(e) => {
+                    if (["e", "E", "+", "-", ".", " "].includes(e.key))
+                      e.preventDefault();
+                  }}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
                 <div className="relative">
                   <input
                     type={showCreatePwd ? "text" : "password"}
                     value={create.password}
-                    onChange={(e) => setCreate((c) => ({ ...c, password: e.target.value }))}
+                    onChange={(e) =>
+                      setCreate((c) => ({ ...c, password: e.target.value }))
+                    }
                     className="w-full border border-gray-300 rounded px-3 py-2 pr-10"
                     placeholder="Enter password (min 6 characters)"
                     required
@@ -621,10 +745,20 @@ const Admins = () => {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <button type="button" onClick={closeCreate} className="px-4 py-2 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300">
+              <button
+                type="button"
+                onClick={closeCreate}
+                className="px-4 py-2 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300"
+              >
                 Cancel
               </button>
-              <button disabled={create.saving} type="submit" className={`px-4 py-2 rounded-md bg-indigo-600 text-white ${create.saving ? "opacity-60" : "hover:bg-indigo-700"}`}>
+              <button
+                disabled={create.saving}
+                type="submit"
+                className={`px-4 py-2 rounded-md bg-indigo-600 text-white ${
+                  create.saving ? "opacity-60" : "hover:bg-indigo-700"
+                }`}
+              >
                 {create.saving ? "Saving..." : "Save"}
               </button>
             </div>
@@ -634,10 +768,12 @@ const Admins = () => {
 
       {/* Delete Confirmation Modal */}
       {confirm.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl ring-1 ring-gray-200 p-6 md:p-7 w-full max-w-md transform transition-all">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl ring-1 ring-gray-200 p-4 sm:p-6 md:p-7 w-full max-w-md transform transition-all max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-gray-900">Confirm Delete</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Confirm Delete
+              </h3>
               <button
                 onClick={confirm.deleting ? undefined : cancelDelete}
                 className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
@@ -653,38 +789,45 @@ const Admins = () => {
               <div className="text-sm">
                 <p className="font-semibold">This action is permanent.</p>
                 <p>
-                  Deleting this admin will permanently remove the admin account and
-                  all records owned by this admin from the system. This cannot be undone.
+                  Deleting this admin will permanently remove the admin account
+                  and all records owned by this admin from the system. This
+                  cannot be undone.
                 </p>
               </div>
             </div>
 
             <p className="text-gray-700 mb-3">
-              Type <span className="font-semibold">DELETE ADMIN</span> to confirm deletion of
-              {" "}
+              Type <span className="font-semibold">DELETE ADMIN</span> to
+              confirm deletion of{" "}
               <span className="font-semibold">
                 {String(confirm.name || "Admin").length > 24
                   ? String(confirm.name || "Admin").slice(0, 24) + "..."
                   : String(confirm.name || "Admin")}
-              </span>
-              {" "}(<span className="break-all">{confirm.mobile}</span>).
+              </span>{" "}
+              (<span className="break-all">{confirm.mobile}</span>).
             </p>
 
             <input
               type="text"
               value={confirm.text || ""}
-              onChange={(e) => setConfirm((prev) => ({ ...prev, text: e.target.value }))}
+              onChange={(e) =>
+                setConfirm((prev) => ({ ...prev, text: e.target.value }))
+              }
               placeholder="DELETE ADMIN"
               autoFocus
               className={`w-full border rounded-md px-3 py-2 mb-1 focus:outline-none focus:ring-2 ${
-                (confirm.text || "").trim() && (confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN"
+                (confirm.text || "").trim() &&
+                (confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN"
                   ? "border-red-500 ring-red-500 bg-red-50"
                   : "border-gray-300 focus:ring-red-500"
               }`}
             />
-            {(confirm.text || "").trim() && (confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN" && (
-              <p className="text-xs text-red-600 mb-3">Please type DELETE ADMIN exactly as shown.</p>
-            )}
+            {(confirm.text || "").trim() &&
+              (confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN" && (
+                <p className="text-xs text-red-600 mb-3">
+                  Please type DELETE ADMIN exactly as shown.
+                </p>
+              )}
 
             <div className="flex justify-end gap-2">
               <button
@@ -696,9 +839,13 @@ const Admins = () => {
               </button>
               <button
                 onClick={doDelete}
-                disabled={(confirm.text || "").trim().toUpperCase() !== "DELETE ADMIN" || confirm.deleting}
+                disabled={
+                  (confirm.text || "").trim().toUpperCase() !==
+                    "DELETE ADMIN" || confirm.deleting
+                }
                 className={`px-4 py-2 rounded-md ${
-                  (confirm.text || "").trim().toUpperCase() === "DELETE ADMIN" && !confirm.deleting
+                  (confirm.text || "").trim().toUpperCase() ===
+                    "DELETE ADMIN" && !confirm.deleting
                     ? "bg-red-600 text-white hover:bg-red-700 shadow-sm"
                     : "bg-gray-300 text-gray-500 cursor-not-allowed"
                 }`}
@@ -712,10 +859,10 @@ const Admins = () => {
 
       {/* Edit Modal */}
       {edit.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
           <form
             onSubmit={saveEdit}
-            className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md"
+            className="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-semibold text-gray-800">
@@ -749,6 +896,7 @@ const Admins = () => {
                 <input
                   value={edit.mobile}
                   disabled
+                  placeholder="Mobile number"
                   className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-gray-600"
                 />
               </div>
@@ -761,6 +909,7 @@ const Admins = () => {
                   onChange={(e) =>
                     setEdit((prev) => ({ ...prev, name: e.target.value }))
                   }
+                  placeholder="Enter admin name"
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
                 />
@@ -777,7 +926,7 @@ const Admins = () => {
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
                 >
-                  <option value="">Select Branch</option>
+                  <option value="">Select branch</option>
                   {branchOptions.map((b) => (
                     <option key={b} value={b}>
                       {b}
@@ -812,21 +961,8 @@ const Admins = () => {
                   onChange={(e) =>
                     setEdit((prev) => ({ ...prev, password: e.target.value }))
                   }
+                  placeholder="Enter new password (optional)"
                   className="w-full border border-gray-300 rounded px-3 py-2"
-                  placeholder="Set/Update password"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Created At
-                </label>
-                <input
-                  value={edit.createdAt}
-                  onChange={(e) =>
-                    setEdit((prev) => ({ ...prev, createdAt: e.target.value }))
-                  }
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                  placeholder="ISO date e.g., 2025-01-01T10:00:00.000Z"
                 />
               </div>
             </div>
@@ -856,7 +992,7 @@ const Admins = () => {
                   edit.saving ? "opacity-60" : "hover:bg-indigo-700"
                 }`}
               >
-                {edit.saving ? "Saving..." : "Save"}
+                {edit.saving ? "Updating..." : "Update"}
               </button>
             </div>
           </form>
@@ -865,7 +1001,7 @@ const Admins = () => {
 
       {/* Snackbar */}
       <div
-        className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-xl ring-1 ring-black/10 transition ${
+        className={`fixed top-2 sm:top-4 right-2 sm:right-4 left-2 sm:left-auto z-50 px-3 sm:px-4 py-2 sm:py-3 rounded-lg shadow-xl ring-1 ring-black/10 transition ${
           snack.open
             ? "opacity-100 translate-y-0"
             : "opacity-0 -translate-y-2 pointer-events-none"
@@ -877,15 +1013,17 @@ const Admins = () => {
         role="alert"
         aria-live="polite"
       >
-        <div className="flex items-center gap-3">
-          <span className="font-medium">{snack.message}</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="font-medium text-xs sm:text-sm flex-1">
+            {snack.message}
+          </span>
           {snack.open && (
             <button
               onClick={() => setSnack((s) => ({ ...s, open: false }))}
-              className="p-1 rounded hover:bg-white/10 focus:outline-none"
+              className="p-1 rounded hover:bg-white/10 focus:outline-none flex-shrink-0"
               aria-label="Close"
             >
-              <FiX className="text-white text-lg" />
+              <FiX className="text-white text-base sm:text-lg" />
             </button>
           )}
         </div>

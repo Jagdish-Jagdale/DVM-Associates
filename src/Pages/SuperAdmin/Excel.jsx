@@ -243,12 +243,13 @@ const TableRow = memo(
       if (field === "Action") {
         const show = !!record.__dirty;
         if (!show) return null;
+        const isUpdate = !record.__local && record.RefNo;
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => onSaveRow(record.globalIndex)}
-              aria-label="Save"
-              title="Save"
+              aria-label={isUpdate ? "Update" : "Save"}
+              title={isUpdate ? "Update" : "Save"}
               className={`p-2 rounded-full bg-amber-600 text-white hover:bg-amber-700`}
             >
               <FiSave className="text-base" />
@@ -322,9 +323,9 @@ const TableRow = memo(
       }
       if (field === "OfficeNo") {
         const locName = record.Location === "PCMC" ? "Pune" : record.Location;
-        const short = (
-          defaultLocations.find((l) => l.name === locName) || {}
-        ).shortForm || "SNGL";
+        const short =
+          (defaultLocations.find((l) => l.name === locName) || {}).shortForm ||
+          "SNGL";
         const office = `DVM/${short}/${serverYearPair || getYearPair()}`;
         return (
           <input
@@ -351,6 +352,21 @@ const TableRow = memo(
             onChange={(e) => {
               const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
               onChangeField(record.globalIndex, field, digits);
+            }}
+            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
+          />
+        );
+      }
+      if (field === "GSTNo") {
+        const val = String(record[field] ?? "");
+        return (
+          <input
+            type="text"
+            value={val}
+            maxLength={15}
+            onChange={(e) => {
+              const input = e.target.value.toUpperCase().slice(0, 15);
+              onChangeField(record.globalIndex, field, input);
             }}
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
           />
@@ -463,7 +479,8 @@ const TableRow = memo(
             return false;
           return true;
         });
-        const bySuper = String(record.createdByRole || "").toLowerCase() === "superadmin";
+        const bySuper =
+          String(record.createdByRole || "").toLowerCase() === "superadmin";
         const showStar = bySuper || !!record.reservedFirst;
         const borderCls = showReserved
           ? anyData
@@ -558,12 +575,7 @@ const TableRow = memo(
 const Excel = () => {
   const dropdownOptions = useMemo(
     () => ({
-      ReportStatus: [
-        "Case Cancel",
-        "Done",
-        "On hold",
-        "Pending",
-      ].sort(),
+      ReportStatus: ["Case Cancel", "Done", "On hold", "Pending"].sort(),
       ReceivedOn: [
         "CBI CC",
         "BOL LLP",
@@ -896,7 +908,14 @@ const Excel = () => {
         })
       );
     }
-  }, [selectedLocation, dateFilter, yearPair, isYmdSunday, serverMonth, records]);
+  }, [
+    selectedLocation,
+    dateFilter,
+    yearPair,
+    isYmdSunday,
+    serverMonth,
+    records,
+  ]);
 
   const recomputeTotals = (rec) => {
     const amount = Math.max(0, Number(rec.Amount) || 0);
@@ -1035,7 +1054,7 @@ const Excel = () => {
           if (tb !== ta) return tb - ta;
           return (
             a.Location.localeCompare(b.Location) ||
-            parseInt(a.RefNo || "0", 10) - parseInt(b.RefNo || "0", 10)
+            parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
           );
         });
         const mapped = sorted.map((r, i) => ({ ...r, globalIndex: i }));
@@ -1058,7 +1077,7 @@ const Excel = () => {
             if (tb !== ta) return tb - ta;
             return (
               a.Location.localeCompare(b.Location) ||
-              parseInt(a.RefNo || "0", 10) - parseInt(b.RefNo || "0", 10)
+              parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
             );
           });
           return ordered.map((r, i) => ({ ...r, globalIndex: i }));
@@ -1379,27 +1398,46 @@ const Excel = () => {
           Total: (amt + gst).toFixed(2),
           Location: loc,
           createdAt: created,
-          createdByRole: r.__local && !r.createdByRole ? "SuperAdmin" : (r.createdByRole || ""),
+          createdByRole:
+            r.__local && !r.createdByRole
+              ? "SuperAdmin"
+              : r.createdByRole || "",
           FMV: Math.max(0, Number(r.FMV) || 0),
         };
       });
 
-      const updateMap = new Map();
-      enriched.forEach((er) => {
-        const orig = complete.find((x) => x.globalIndex === er.globalIndex);
-        if (orig && !orig.RefNo && er.RefNo) {
-          const id = `${er.OfficeNo}#${String(er.Sr)}`;
-          updateMap.set(id, er.RefNo);
-        }
-      });
-      if (updateMap.size) {
-        setRecords((prev) =>
-          prev.map((p) => {
-            const id = `${p.OfficeNo}#${String(p.Sr)}`;
-            return updateMap.has(id) ? { ...p, RefNo: updateMap.get(id) } : p;
+      // reflect newly assigned RefNo in local state before saving
+      const savedIdx = new Set(complete.map((c) => c.globalIndex));
+      setRecords((prev) => {
+        const updated = prev.map((p) => {
+          if (savedIdx.has(p.globalIndex)) {
+            const enrichedRec = enriched.find(
+              (e) => e.globalIndex === p.globalIndex
+            );
+            if (enrichedRec) {
+              return {
+                ...enrichedRec,
+                __dirty: false,
+                __local: false,
+              };
+            }
+          }
+          return p;
+        });
+        // Sort by createdAt descending, then by RefNo descending
+        return updated
+          .sort((a, b) => {
+            if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
+            const ta = Date.parse(a.createdAt || "") || 0;
+            const tb = Date.parse(b.createdAt || "") || 0;
+            if (tb !== ta) return tb - ta;
+            return (
+              a.Location.localeCompare(b.Location) ||
+              parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
+            );
           })
-        );
-      }
+          .map((r, i) => ({ ...r, globalIndex: i }));
+      });
 
       await Promise.all(
         enriched.map(async (r) => {
@@ -1411,14 +1449,6 @@ const Excel = () => {
             Print: !!r.Print,
           });
         })
-      );
-      const savedIdx = new Set(complete.map((c) => c.globalIndex));
-      setRecords((prev) =>
-        prev.map((p) =>
-          savedIdx.has(p.globalIndex)
-            ? { ...p, __dirty: false, __local: false }
-            : p
-        )
       );
     },
     [yearPairForRecord, records, isRecordComplete, serverDate]
@@ -1607,7 +1637,7 @@ const Excel = () => {
       if (tb !== ta) return tb - ta;
       return (
         a.Location.localeCompare(b.Location) ||
-        parseInt(a.RefNo || "0", 10) - parseInt(b.RefNo || "0", 10)
+        parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
       );
     });
     return arr;
@@ -1662,7 +1692,6 @@ const Excel = () => {
       RecdDate: "",
       GSTNo: "",
       Remark: "",
-      FMV: "",
       createdAt: dateFilter,
       globalIndex: -1,
     });
@@ -1801,6 +1830,7 @@ const Excel = () => {
           <SearchActionsCard
             title="Search & Actions"
             recordsCount={filtered.length}
+            recordsLabel="Excel Records"
             contentClassName="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3"
             rightPrimary={
               <div className="flex flex-wrap items-center gap-2">
@@ -1840,8 +1870,12 @@ const Excel = () => {
                   className={`px-3 py-2 rounded-md flex items-center gap-2 text-sm ${
                     filtered.length === 0
                       ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700"
                   }`}
+                  style={{
+                    fontFamily:
+                      "'Inter', 'Segoe UI', Roboto, Arial, 'Helvetica Neue', sans-serif",
+                  }}
                 >
                   <FiDownload />
                   <span>Download</span>
@@ -2157,18 +2191,20 @@ const Excel = () => {
               >
                 <div className="flex items-center gap-2 mb-2">
                   <FiAlertTriangle className="text-amber-500 text-xl" />
-                  <h3 className="text-lg font-semibold text-gray-800">Confirm Save</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    Confirm Save
+                  </h3>
                 </div>
                 <p className="text-gray-600 mb-4 whitespace-pre-line">
-  {confirmState.scope === "all"
-    ? `You are about to save all changes.
+                  {confirmState.scope === "all"
+                    ? `You are about to save all changes.
 Please ensure that all entered data is correct before continuing.`
-    : confirmState.rowIndex === -1
-    ? `You are about to save the reserved row.
+                    : confirmState.rowIndex === -1
+                    ? `You are about to save the reserved row.
 Please verify all fields before saving.`
-    : `You are about to save changes to this row.
+                    : `You are about to save changes to this row.
 Please ensure the data is accurate before proceeding.`}
-</p>
+                </p>
 
                 <div className="flex justify-end gap-2">
                   <button
