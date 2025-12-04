@@ -1107,6 +1107,8 @@ const Excel = () => {
         if (gi < 0 || gi >= prev.length) return prev;
         const next = [...prev];
         let rec = { ...next[gi] };
+
+        // Apply the field change
         if (field === "Amount") {
           if (value === "") {
             rec.Amount = "";
@@ -1122,45 +1124,46 @@ const Excel = () => {
             rec.FMV = isNaN(n) ? "" : Math.max(0, n);
           }
         } else rec[field] = value;
+
         rec = recomputeTotals(rec);
         if (!rec.Month) rec.Month = serverMonth;
+
         // Keep OfficeNo in sync with current Location and year pair when relevant fields change
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
           const locName = rec.Location === "PCMC" ? "Pune" : rec.Location;
           const yp = yearPairForRecord(rec);
           rec.OfficeNo = `DVM/${shortOf(locName)}/${yp}`;
         }
+
+        // Mark as dirty to indicate unsaved changes
         rec = { ...rec, __dirty: true };
         next[gi] = rec;
+
         // compute validation for this row
         const miss = getMissingFields(rec);
         validationUpdate = { gi, fields: Array.from(miss) };
+
         // If row has become complete and has no RefNo, schedule assignment
         if (isRecordComplete(rec) && !rec.RefNo) {
           const yp = yearPairForRecord(rec);
           assignInfo = { gi, yp };
         }
+
         return next;
       });
+
       if (validationUpdate) {
         setValidationMap((prev) => {
           const next = { ...prev };
-          const has = Object.prototype.hasOwnProperty.call(
-            prev,
-            validationUpdate.gi
-          );
-          if (validationUpdate.fields.length) {
-            if (has) {
-              next[validationUpdate.gi] = validationUpdate.fields;
-            }
+          if (validationUpdate.fields.length > 0) {
+            next[validationUpdate.gi] = validationUpdate.fields;
           } else {
-            if (has) {
-              delete next[validationUpdate.gi];
-            }
+            delete next[validationUpdate.gi];
           }
           return next;
         });
       }
+
       if (assignInfo) {
         assignRefNoImmediate(assignInfo.gi, assignInfo.yp);
       }
@@ -1171,6 +1174,8 @@ const Excel = () => {
       yearPairForRecord,
       getMissingFields,
       serverMonth,
+      recomputeTotals,
+      shortOf,
     ]
   );
 
@@ -1367,23 +1372,27 @@ const Excel = () => {
         return next;
       });
 
+      // Filter only complete records for saving
       const complete = recList.filter(isRecordComplete);
       const count = complete.length;
+
+      // If no complete records, show error
       if (count === 0) {
         setErrorSnack({
           open: true,
-          message: "Please fill all required fields to generate Ref No",
+          message: "Please fill all required fields to save records",
         });
         return;
       }
+
       setIsSaving(true);
 
       try {
-        await saveRecords(recList);
+        await saveRecords(complete);
 
         setSuccessSnack({
           open: true,
-          message: "Records have been successfully saved.",
+          message: `${count} record${count > 1 ? "s" : ""} saved successfully`,
         });
       } catch (error) {
         console.error("Error saving records:", error);
@@ -1400,12 +1409,39 @@ const Excel = () => {
   );
 
   const handleSaveAll = useCallback(() => {
+    // Filter records that have changes
+    const dirtyRecords = records.filter((r) => r.__dirty);
+    if (dirtyRecords.length === 0) {
+      setErrorSnack({
+        open: true,
+        message: "No changes to save",
+      });
+      return;
+    }
     setConfirmState({ open: true, scope: "all", rowIndex: null });
-  }, []);
+  }, [records]);
 
-  const handleSaveRow = useCallback((gi) => {
-    setConfirmState({ open: true, scope: "row", rowIndex: gi });
-  }, []);
+  const handleSaveRow = useCallback(
+    (gi) => {
+      const record = records.find((r) => r.globalIndex === gi);
+      if (!record) {
+        setErrorSnack({
+          open: true,
+          message: "Record not found",
+        });
+        return;
+      }
+      if (!record.__dirty) {
+        setErrorSnack({
+          open: true,
+          message: "No changes to save",
+        });
+        return;
+      }
+      setConfirmState({ open: true, scope: "row", rowIndex: gi });
+    },
+    [records]
+  );
 
   const filtered = useMemo(() => {
     const base = records.filter(
@@ -1957,8 +1993,12 @@ Please ensure the data is accurate before proceeding.`}
                     onClick={() => {
                       const recs =
                         confirmState.scope === "all"
-                          ? records
-                          : [records[confirmState.rowIndex]];
+                          ? records.filter((r) => r.__dirty)
+                          : [
+                              records.find(
+                                (r) => r.globalIndex === confirmState.rowIndex
+                              ),
+                            ].filter(Boolean);
                       setConfirmState({
                         open: false,
                         scope: "",
