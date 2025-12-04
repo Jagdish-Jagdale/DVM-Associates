@@ -244,25 +244,86 @@ const SuperAdminDashboard = () => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    layout: {
+      padding: {
+        bottom: window.innerWidth < 640 ? 20 : 10,
+      },
+    },
     plugins: {
-      legend: { position: "top" },
+      legend: {
+        position: "top",
+        labels: {
+          boxWidth: window.innerWidth < 640 ? 10 : 12,
+          padding: window.innerWidth < 640 ? 6 : 8,
+          font: {
+            size:
+              window.innerWidth < 640 ? 9 : window.innerWidth < 1024 ? 11 : 12,
+          },
+        },
+      },
       title: {
         display: true,
-        text: "Total, Pending and Cancelled Records by Branch",
+        text: "Branch Performance Overview",
+        font: {
+          size:
+            window.innerWidth < 640 ? 11 : window.innerWidth < 1024 ? 14 : 16,
+          weight: "bold",
+        },
+        padding: {
+          top: 5,
+          bottom: window.innerWidth < 640 ? 15 : 10,
+        },
+      },
+      tooltip: {
+        backgroundColor: "rgba(0, 0, 0, 0.8)",
+        padding: window.innerWidth < 640 ? 6 : 8,
+        titleFont: {
+          size: window.innerWidth < 640 ? 11 : 12,
+        },
+        bodyFont: {
+          size: window.innerWidth < 640 ? 10 : 11,
+        },
       },
     },
     scales: {
+      x: {
+        ticks: {
+          font: {
+            size:
+              window.innerWidth < 640 ? 8 : window.innerWidth < 1024 ? 10 : 11,
+          },
+          maxRotation: window.innerWidth < 640 ? 45 : 0,
+          minRotation: window.innerWidth < 640 ? 45 : 0,
+          autoSkip: false,
+          padding: window.innerWidth < 640 ? 5 : 8,
+        },
+        grid: {
+          display: false,
+        },
+      },
       y: {
         beginAtZero: true,
         suggestedMax: 10,
-        ticks: { stepSize: 1, precision: 0 },
+        ticks: {
+          stepSize: 1,
+          precision: 0,
+          font: {
+            size:
+              window.innerWidth < 640 ? 9 : window.innerWidth < 1024 ? 10 : 11,
+          },
+        },
+        grid: {
+          color: "rgba(0, 0, 0, 0.05)",
+        },
       },
     },
+    barThickness:
+      window.innerWidth < 640 ? 10 : window.innerWidth < 1024 ? 16 : 20,
   };
 
   return (
-    <div className="min-h-screen bg-[#f0f4f8] p-2 sm:p-4 md:p-6">
-      <div className="w-full max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#f0f4f8] p-2 xs:p-3 sm:p-4 md:p-6 lg:p-8">
+      <div className="w-full max-w-[1400px] mx-auto">
         <div className="mb-4 sm:mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
             <div className="flex flex-col">
@@ -348,9 +409,13 @@ const SuperAdminDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow">
-          <div className="relative h-64 xs:h-72 sm:h-80 md:h-96 lg:h-[28rem]">
-            <Bar data={chartData} options={chartOptions} />
+        <div className="bg-white p-2 xs:p-3 sm:p-4 md:p-6 rounded-lg shadow-sm">
+          <div className="overflow-x-auto sm:overflow-x-visible -mx-2 xs:-mx-3 sm:mx-0">
+            <div className="min-w-[600px] sm:min-w-0">
+              <div className="relative h-56 xs:h-64 sm:h-72 md:h-80 lg:h-96 xl:h-[28rem]">
+                <Bar data={chartData} options={chartOptions} />
+              </div>
+            </div>
           </div>
         </div>
       </div>
