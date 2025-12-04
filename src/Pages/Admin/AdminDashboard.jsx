@@ -135,6 +135,17 @@ const Admin = () => {
   const [selectedYear, setSelectedYear] = useState(
     String(new Date().getFullYear())
   );
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const authBranch = useMemo(() => {
     try {
       return (
@@ -307,22 +318,67 @@ const Admin = () => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: "top" },
+      legend: {
+        position: "top",
+        labels: {
+          padding: 10,
+          font: {
+            size: 12,
+          },
+        },
+      },
       title: {
         display: true,
         text: "Total, Pending and Cancelled Records by Month",
+        font: {
+          size: 16,
+          weight: "bold",
+        },
+        padding: {
+          top: 10,
+          bottom: 15,
+        },
+      },
+      tooltip: {
+        backgroundColor: "rgba(0, 0, 0, 0.8)",
+        padding: 10,
       },
     },
     scales: {
+      x: {
+        grid: {
+          display: true,
+          color: "rgba(0, 0, 0, 0.08)",
+          lineWidth: 1,
+        },
+        ticks: {
+          font: {
+            size: windowWidth < 640 ? 9 : 11,
+          },
+          maxRotation: windowWidth < 640 ? 45 : 0,
+          minRotation: windowWidth < 640 ? 45 : 0,
+          autoSkip: false,
+        },
+      },
       y: {
         beginAtZero: true,
         suggestedMax: 10,
         ticks: {
           stepSize: 1,
           precision: 0,
+          font: {
+            size: 11,
+          },
+        },
+        grid: {
+          display: true,
+          color: "rgba(0, 0, 0, 0.08)",
+          lineWidth: 1,
         },
       },
     },
+    categoryPercentage: 0.8,
+    barPercentage: 0.75,
   };
 
   return (
@@ -408,8 +464,10 @@ const Admin = () => {
 
         {/* Bar Chart */}
         <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="relative h-80 md:h-[28rem]">
-            <Bar data={chartData} options={chartOptions} />
+          <div className="overflow-x-auto">
+            <div className="min-w-[600px] relative h-80 md:h-[28rem]">
+              <Bar data={chartData} options={chartOptions} />
+            </div>
           </div>
         </div>
       </div>

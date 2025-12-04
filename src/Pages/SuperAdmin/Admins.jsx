@@ -234,7 +234,7 @@ const Admins = () => {
     if (!name || !branch || !mobile || !password) {
       setSnack({
         open: true,
-        message: "Please fill all fields",
+        message: "Please complete all required fields",
         type: "error",
       });
       return;
@@ -242,7 +242,7 @@ const Admins = () => {
     if (!validateMobile(mobile)) {
       setSnack({
         open: true,
-        message: "Mobile must be 10 digits",
+        message: "Mobile number must be exactly 10 digits",
         type: "error",
       });
       return;
@@ -250,7 +250,7 @@ const Admins = () => {
     if (password.length < 6) {
       setSnack({
         open: true,
-        message: "Password must be at least 6 characters",
+        message: "Password must be at least 6 characters long",
         type: "error",
       });
       return;
@@ -259,7 +259,6 @@ const Admins = () => {
       setCreate((c) => ({ ...c, saving: true }));
       const adminRef = ref(db, `admins/${mobile}`);
       const email = `${mobile}@admin.com`.toLowerCase();
-      // Check both DB and Auth for duplicates
       const [existing, methods] = await Promise.all([
         get(adminRef),
         fetchSignInMethodsForEmail(auth, email),
@@ -273,7 +272,7 @@ const Admins = () => {
       if (existsInDB || existsInAuth) {
         setSnack({
           open: true,
-          message: "Admin with this mobile number already exists",
+          message: "An admin with this mobile number already exists",
           type: "error",
         });
         setCreate((c) => ({ ...c, saving: false }));
@@ -290,14 +289,14 @@ const Admins = () => {
       closeCreate();
       setSnack({
         open: true,
-        message: "New admin successfully added.",
+        message: "Admin created successfully",
         type: "success",
       });
     } catch (err) {
       setCreate((c) => ({ ...c, saving: false }));
       setSnack({
         open: true,
-        message: `Create failed: ${err.message}`,
+        message: `Failed to create admin: ${err.message}`,
         type: "error",
       });
     }
@@ -344,7 +343,7 @@ const Admins = () => {
       });
       setSnack({
         open: true,
-        message: "Admin details successfully updated.",
+        message: "Admin updated successfully",
         type: "success",
       });
     } catch (err) {
@@ -352,7 +351,7 @@ const Admins = () => {
       setEdit((prev) => ({ ...prev, saving: false }));
       setSnack({
         open: true,
-        message: `Update failed: ${err.message}`,
+        message: `Failed to update admin: ${err.message}`,
         type: "error",
       });
     }
@@ -407,14 +406,14 @@ const Admins = () => {
       await remove(ref(db, `admins/${mobile}`));
       setSnack({
         open: true,
-        message: "Admin successfully removed.",
+        message: "Admin deleted successfully",
         type: "success",
       });
     } catch (err) {
       console.error(err);
       setSnack({
         open: true,
-        message: `Delete failed: ${err.message}`,
+        message: `Failed to delete admin: ${err.message}`,
         type: "error",
       });
     } finally {

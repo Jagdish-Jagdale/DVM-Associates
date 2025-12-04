@@ -111,6 +111,16 @@ const SuperAdminDashboard = () => {
   const [selectedYear, setSelectedYear] = useState(
     new Date().getFullYear().toString()
   );
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const recordsRef = ref(db, "excel_records");
@@ -246,18 +256,17 @@ const SuperAdminDashboard = () => {
     maintainAspectRatio: false,
     layout: {
       padding: {
-        bottom: window.innerWidth < 640 ? 20 : 10,
+        bottom: windowWidth < 640 ? 20 : 10,
       },
     },
     plugins: {
       legend: {
         position: "top",
         labels: {
-          boxWidth: window.innerWidth < 640 ? 10 : 12,
-          padding: window.innerWidth < 640 ? 6 : 8,
+          boxWidth: windowWidth < 640 ? 10 : 12,
+          padding: windowWidth < 640 ? 6 : 8,
           font: {
-            size:
-              window.innerWidth < 640 ? 9 : window.innerWidth < 1024 ? 11 : 12,
+            size: windowWidth < 640 ? 9 : windowWidth < 1024 ? 11 : 12,
           },
         },
       },
@@ -265,23 +274,22 @@ const SuperAdminDashboard = () => {
         display: true,
         text: "Branch Performance Overview",
         font: {
-          size:
-            window.innerWidth < 640 ? 11 : window.innerWidth < 1024 ? 14 : 16,
+          size: windowWidth < 640 ? 11 : windowWidth < 1024 ? 14 : 16,
           weight: "bold",
         },
         padding: {
           top: 5,
-          bottom: window.innerWidth < 640 ? 15 : 10,
+          bottom: windowWidth < 640 ? 15 : 10,
         },
       },
       tooltip: {
         backgroundColor: "rgba(0, 0, 0, 0.8)",
-        padding: window.innerWidth < 640 ? 6 : 8,
+        padding: windowWidth < 640 ? 6 : 8,
         titleFont: {
-          size: window.innerWidth < 640 ? 11 : 12,
+          size: windowWidth < 640 ? 11 : 12,
         },
         bodyFont: {
-          size: window.innerWidth < 640 ? 10 : 11,
+          size: windowWidth < 640 ? 10 : 11,
         },
       },
     },
@@ -289,16 +297,17 @@ const SuperAdminDashboard = () => {
       x: {
         ticks: {
           font: {
-            size:
-              window.innerWidth < 640 ? 8 : window.innerWidth < 1024 ? 10 : 11,
+            size: windowWidth < 640 ? 8 : windowWidth < 1024 ? 10 : 11,
           },
-          maxRotation: window.innerWidth < 640 ? 45 : 0,
-          minRotation: window.innerWidth < 640 ? 45 : 0,
+          maxRotation: windowWidth < 640 ? 45 : 0,
+          minRotation: windowWidth < 640 ? 45 : 0,
           autoSkip: false,
-          padding: window.innerWidth < 640 ? 5 : 8,
+          padding: windowWidth < 640 ? 5 : 8,
         },
         grid: {
-          display: false,
+          display: true,
+          color: "rgba(0, 0, 0, 0.08)",
+          lineWidth: 1,
         },
       },
       y: {
@@ -308,17 +317,18 @@ const SuperAdminDashboard = () => {
           stepSize: 1,
           precision: 0,
           font: {
-            size:
-              window.innerWidth < 640 ? 9 : window.innerWidth < 1024 ? 10 : 11,
+            size: windowWidth < 640 ? 9 : windowWidth < 1024 ? 10 : 11,
           },
         },
         grid: {
-          color: "rgba(0, 0, 0, 0.05)",
+          display: true,
+          color: "rgba(0, 0, 0, 0.08)",
+          lineWidth: 1,
         },
       },
     },
-    barThickness:
-      window.innerWidth < 640 ? 10 : window.innerWidth < 1024 ? 16 : 20,
+    categoryPercentage: 0.8,
+    barPercentage: 0.75,
   };
 
   return (

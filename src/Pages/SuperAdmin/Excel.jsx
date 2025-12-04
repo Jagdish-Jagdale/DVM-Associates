@@ -444,6 +444,10 @@ const TableRow = memo(
       if (field === "Sr") {
         const isReservedTop = record.globalIndex === -1;
         const showReserved = isReservedTop || !!record.reservedFirst;
+
+        // Check if this is the unsaved reserved row (doesn't have committedRefNo yet)
+        const isUnsavedReserved = isReservedTop && !record.committedRefNo;
+
         const valuesToCheck = [
           // Exclude Month for reserved row (Month is auto-filled)
           ...(showReserved ? [] : [record.Month]),
@@ -482,14 +486,21 @@ const TableRow = memo(
         const bySuper =
           String(record.createdByRole || "").toLowerCase() === "superadmin";
         const showStar = bySuper || !!record.reservedFirst;
+
+        // For unsaved reserved row, border stays red until saved
+        // For saved reserved row, show green if complete
         const borderCls = showReserved
-          ? anyData
-            ? "border-green-500"
+          ? isUnsavedReserved
+            ? "border-red-500" // Always red until saved
+            : anyData
+            ? "border-green-500" // Green after saved
             : "border-red-500"
           : "";
         const titleText = showReserved
-          ? anyData
-            ? "Reserved row has data"
+          ? isUnsavedReserved
+            ? "Reserved row not saved yet"
+            : anyData
+            ? "Reserved row saved"
             : "Reserved row empty"
           : "";
         return (
@@ -1429,7 +1440,7 @@ const Excel = () => {
           }
           return p;
         });
-        // Sort by createdAt descending, then by RefNo descending
+        // Sort by createdAt descending, then by RefNo descending for same RefNo
         return updated
           .sort((a, b) => {
             if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
@@ -1680,15 +1691,16 @@ const Excel = () => {
         (r) => String(r.BillStatus || "").toLowerCase() === target
       );
     }
+    // Sort by RefNo descending, then by createdAt descending for same RefNo
     arr.sort((a, b) => {
       if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
+      const refA = parseInt(a.RefNo || "0", 10);
+      const refB = parseInt(b.RefNo || "0", 10);
+      if (refB !== refA) return refB - refA;
       const ta = Date.parse(a.createdAt || "") || 0;
       const tb = Date.parse(b.createdAt || "") || 0;
       if (tb !== ta) return tb - ta;
-      return (
-        a.Location.localeCompare(b.Location) ||
-        parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
-      );
+      return a.Location.localeCompare(b.Location);
     });
     return arr;
   }, [
@@ -1703,15 +1715,64 @@ const Excel = () => {
   const displayRows = useMemo(() => {
     if (!selectedLocation || !dateFilter) return filtered;
     if (isYmdSunday(dateFilter)) return filtered;
+
+    // Check if we have a reserved row
     if (reservedRow) {
+      // Check if reserved row has data (is filled)
+      const reservedHasData = [
+        reservedRow.VisitDate,
+        reservedRow.ReportDate,
+        reservedRow.TechnicalExecutive,
+        reservedRow.Bank,
+        reservedRow.Branch,
+        reservedRow.ClientName,
+        reservedRow.ClientContactNo,
+        reservedRow.Locations,
+        reservedRow.CaseInitiated,
+        reservedRow.Engineer,
+        reservedRow.ReportStatus,
+        reservedRow.BillStatus,
+        reservedRow.ReceivedOn,
+        reservedRow.RecdDate,
+        reservedRow.GSTNo,
+        reservedRow.Remark,
+        reservedRow.Amount,
+        reservedRow.FMV,
+      ].some((v) => {
+        if (typeof v === "boolean") return v;
+        if (typeof v === "number") return v > 0;
+        const s = String(v ?? "").trim();
+        if (s === "" || s === "0" || s === "0.0" || s === "0.00") return false;
+        return true;
+      });
+
+      // Filter out duplicate if reserved row has committedRefNo
       const filteredNoDup = reservedRow.committedRefNo
         ? filtered.filter(
             (r) =>
               parseInt(r.RefNo, 10) !== parseInt(reservedRow.committedRefNo, 10)
           )
         : filtered;
-      return [reservedRow, ...filteredNoDup];
+
+      // If reserved row is empty OR doesn't have committedRefNo yet (unsaved), keep it at top
+      if (!reservedHasData || !reservedRow.committedRefNo) {
+        return [reservedRow, ...filteredNoDup];
+      }
+
+      // If reserved row has data AND has committedRefNo (saved), merge and sort by RefNo descending
+      const merged = [reservedRow, ...filteredNoDup];
+      merged.sort((a, b) => {
+        const refA = parseInt(a.RefNo || a.committedRefNo || "0", 10);
+        const refB = parseInt(b.RefNo || b.committedRefNo || "0", 10);
+        if (refB !== refA) return refB - refA;
+        const ta = Date.parse(a.createdAt || "") || 0;
+        const tb = Date.parse(b.createdAt || "") || 0;
+        if (tb !== ta) return tb - ta;
+        return a.Location.localeCompare(b.Location);
+      });
+      return merged;
     }
+
     const actual = selectedLocation === "PCMC" ? "Pune" : selectedLocation;
     const officeNo = `DVM/${shortOf(actual)}/${yearPair}`;
     const synthetic = recomputeTotals({
@@ -1742,9 +1803,12 @@ const Excel = () => {
       RecdDate: "",
       GSTNo: "",
       Remark: "",
+      FMV: "",
       createdAt: dateFilter,
       globalIndex: -1,
     });
+
+    // Synthetic row is always empty, so keep it at top
     return [synthetic, ...filtered];
   }, [
     filtered,
@@ -1753,6 +1817,7 @@ const Excel = () => {
     yearPair,
     reservedRow,
     isYmdSunday,
+    serverMonth,
   ]);
   const groups = useMemo(() => {
     if (!filtered.length) return [];

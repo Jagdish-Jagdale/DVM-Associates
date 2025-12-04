@@ -789,38 +789,86 @@ const Excel = () => {
       return;
     }
     const loc = selectedLocation === "PCMC" ? "Pune" : selectedLocation;
-    const path = `reserved_rows/${dateFilter}/${loc}`;
-    const u = onValue(
-      ref(db, path),
-      (snap) => {
-        const data = snap.val();
-        if (data) {
-          const ypForDate = yearPairFromDate(dateFilter) || yearPair;
-          const officeNo = data.OfficeNo || `DVM/${shortOf(loc)}/${ypForDate}`;
-          const refNo = data.committedRefNo || data.RefNo || "";
-          setReservedRow(
-            recomputeTotals({
-              ...data,
-              Location: loc,
-              Sr: "1",
-              globalIndex: -1,
-              OfficeNo: officeNo,
-              RefNo: refNo,
-              committedRefNo: data.committedRefNo,
-            })
-          );
-        } else {
-          setReservedRow(null);
-        }
-      },
-      () => setReservedRow(null)
-    );
-    return () => {
-      try {
-        u();
-      } catch {}
-    };
-  }, [selectedLocation, dateFilter, isYmdSunday]);
+
+    // Check if reserved row already exists in excel_records for this date and location
+    const existingReserved = records.find((r) => {
+      const locMatch = (r.Location === "PCMC" ? "Pune" : r.Location) === loc;
+      if (!locMatch) return false;
+      const s2 = String(r.createdAt || "").trim();
+      const iso2 = /^\d{4}-\d{2}-\d{2}$/.test(s2)
+        ? s2
+        : (function () {
+            if (!s2) return "";
+            const d = new Date(s2);
+            if (isNaN(d.getTime())) return "";
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            return `${yyyy}-${mm}-${dd}`;
+          })();
+      return r.reservedFirst && iso2 === dateFilter;
+    });
+
+    if (existingReserved) {
+      // Use the existing reserved row from records
+      setReservedRow(
+        recomputeTotals({
+          ...existingReserved,
+          Sr: "1",
+          globalIndex: -1,
+          Month: existingReserved.Month || serverMonth,
+          committedRefNo:
+            existingReserved.committedRefNo || existingReserved.RefNo || "",
+        })
+      );
+    } else {
+      // No reserved row exists from SuperAdmin, create a synthetic one for display
+      const actual = loc === "PCMC" ? "Pune" : loc;
+      const officeNo = `DVM/${shortOf(actual)}/${yearPair}`;
+      setReservedRow(
+        recomputeTotals({
+          Sr: "1",
+          globalSr: "",
+          OfficeNo: officeNo,
+          RefNo: "",
+          Month: serverMonth,
+          VisitDate: "",
+          ReportDate: "",
+          TechnicalExecutive: "",
+          Bank: "",
+          Branch: "",
+          ClientName: "",
+          ClientContactNo: "",
+          Locations: "",
+          Location: actual,
+          CaseInitiated: "",
+          Engineer: "",
+          VisitStatus: false,
+          ReportStatus: "",
+          SoftCopy: false,
+          Print: false,
+          FMV: "",
+          Amount: "",
+          GST: 0,
+          BillStatus: "",
+          ReceivedOn: "",
+          RecdDate: "",
+          GSTNo: "",
+          Remark: "",
+          createdAt: dateFilter,
+          globalIndex: -1,
+          committedRefNo: "",
+        })
+      );
+    }
+  }, [
+    selectedLocation,
+    dateFilter,
+    isYmdSunday,
+    serverMonth,
+    records,
+    yearPair,
+  ]);
 
   const recomputeTotals = (rec) => {
     const amount = Math.max(0, Number(rec.Amount) || 0);
@@ -1500,15 +1548,31 @@ const Excel = () => {
         );
       });
     }
+
+    // Sort logic: if date filter is active, sort by createdAt desc then RefNo desc
+    // If no date filter, sort by RefNo desc
     arr.sort((a, b) => {
       if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
-      const ta = Date.parse(a.createdAt || "") || 0;
-      const tb = Date.parse(b.createdAt || "") || 0;
-      if (tb !== ta) return tb - ta;
-      return (
-        a.Location.localeCompare(b.Location) ||
-        parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
-      );
+
+      if (dateFilter) {
+        // When date filter is active, sort by createdAt descending first
+        const ta = Date.parse(a.createdAt || "") || 0;
+        const tb = Date.parse(b.createdAt || "") || 0;
+        if (tb !== ta) return tb - ta;
+        return (
+          a.Location.localeCompare(b.Location) ||
+          parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
+        );
+      } else {
+        // When no date filter, sort by RefNo descending only
+        const refA = parseInt(a.RefNo || "0", 10);
+        const refB = parseInt(b.RefNo || "0", 10);
+        if (refB !== refA) return refB - refA;
+        const ta = Date.parse(a.createdAt || "") || 0;
+        const tb = Date.parse(b.createdAt || "") || 0;
+        if (tb !== ta) return tb - ta;
+        return a.Location.localeCompare(b.Location);
+      }
     });
     return arr;
   }, [
@@ -1524,50 +1588,68 @@ const Excel = () => {
     // Skip reserved/synthetic row for any Sunday date
     if (!selectedLocation || !dateFilter) return filtered;
     if (isYmdSunday(dateFilter)) return filtered;
+
+    // Always show reserved row at top if we have one
     if (reservedRow) {
-      const filteredNoDup = reservedRow.committedRefNo
-        ? filtered.filter(
-            (r) =>
-              parseInt(r.RefNo, 10) !== parseInt(reservedRow.committedRefNo, 10)
-          )
-        : filtered;
-      return [reservedRow, ...filteredNoDup];
+      // Check if reserved row has data (is filled)
+      const reservedHasData = [
+        reservedRow.VisitDate,
+        reservedRow.ReportDate,
+        reservedRow.TechnicalExecutive,
+        reservedRow.Bank,
+        reservedRow.Branch,
+        reservedRow.ClientName,
+        reservedRow.ClientContactNo,
+        reservedRow.Locations,
+        reservedRow.CaseInitiated,
+        reservedRow.Engineer,
+        reservedRow.ReportStatus,
+        reservedRow.BillStatus,
+        reservedRow.ReceivedOn,
+        reservedRow.RecdDate,
+        reservedRow.GSTNo,
+        reservedRow.Remark,
+        reservedRow.Amount,
+        reservedRow.FMV,
+      ].some((v) => {
+        if (typeof v === "boolean") return v;
+        if (typeof v === "number") return v > 0;
+        const s = String(v ?? "").trim();
+        if (s === "" || s === "0" || s === "0.0" || s === "0.00") return false;
+        return true;
+      });
+
+      // Remove the reserved row from filtered to avoid duplicates
+      const filteredNoDup =
+        reservedRow.committedRefNo || reservedRow.RefNo
+          ? filtered.filter((r) => {
+              const refToCheck =
+                reservedRow.committedRefNo || reservedRow.RefNo;
+              return parseInt(r.RefNo, 10) !== parseInt(refToCheck, 10);
+            })
+          : filtered;
+
+      // If reserved row is empty, keep it at top
+      if (!reservedHasData) {
+        return [reservedRow, ...filteredNoDup];
+      }
+
+      // If reserved row has data, merge and sort by RefNo descending
+      const merged = [reservedRow, ...filteredNoDup];
+      merged.sort((a, b) => {
+        const refA = parseInt(a.RefNo || a.committedRefNo || "0", 10);
+        const refB = parseInt(b.RefNo || b.committedRefNo || "0", 10);
+        if (refB !== refA) return refB - refA;
+        const ta = Date.parse(a.createdAt || "") || 0;
+        const tb = Date.parse(b.createdAt || "") || 0;
+        if (tb !== ta) return tb - ta;
+        return a.Location.localeCompare(b.Location);
+      });
+      return merged;
     }
-    const actual = selectedLocation === "PCMC" ? "Pune" : selectedLocation;
-    const officeNo = `DVM/${shortOf(actual)}/${yearPair}`;
-    const synthetic = recomputeTotals({
-      Sr: "1",
-      globalSr: "",
-      OfficeNo: officeNo,
-      RefNo: "",
-      Month: serverMonth,
-      VisitDate: "",
-      ReportDate: "",
-      TechnicalExecutive: "",
-      Bank: "",
-      Branch: "",
-      ClientName: "",
-      ClientContactNo: "",
-      Locations: "",
-      Location: actual,
-      CaseInitiated: "",
-      Engineer: "",
-      VisitStatus: false,
-      ReportStatus: "",
-      SoftCopy: false,
-      Print: false,
-      FMV: "",
-      Amount: "",
-      GST: 0,
-      BillStatus: "",
-      ReceivedOn: "",
-      RecdDate: "",
-      GSTNo: "",
-      Remark: "",
-      createdAt: dateFilter,
-      globalIndex: -1,
-    });
-    return [synthetic, ...filtered];
+
+    // No reserved row (shouldn't happen with new logic, but fallback)
+    return filtered;
   }, [
     filtered,
     selectedLocation,

@@ -591,9 +591,19 @@ const Pending = () => {
     }
     if (dateFilter) {
       arr = arr.filter((r) => {
-        const v = toIso(r.VisitDate);
-        const rp = toIso(r.ReportDate);
-        return (v && v === dateFilter) || (rp && rp === dateFilter);
+        const s2 = String(r.createdAt || "").trim();
+        const iso2 = /^\d{4}-\d{2}-\d{2}$/.test(s2)
+          ? s2
+          : (function () {
+              if (!s2) return "";
+              const d = new Date(s2);
+              if (isNaN(d.getTime())) return "";
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, "0");
+              const dd = String(d.getDate()).padStart(2, "0");
+              return `${yyyy}-${mm}-${dd}`;
+            })();
+        return iso2 === dateFilter;
       });
     }
     if (searchText && searchText.trim()) {
@@ -605,14 +615,15 @@ const Pending = () => {
         return refDisp.includes(q) || client.includes(q) || gst.includes(q);
       });
     }
+    // Sort by RefNo descending, then by createdAt descending
     arr = arr.sort((a, b) => {
+      const refA = parseInt(a.RefNo || "0", 10);
+      const refB = parseInt(b.RefNo || "0", 10);
+      if (refB !== refA) return refB - refA;
       const ta = Date.parse(a.createdAt || "") || 0;
       const tb = Date.parse(b.createdAt || "") || 0;
       if (tb !== ta) return tb - ta;
-      return (
-        a.Location.localeCompare(b.Location) ||
-        parseInt(a.RefNo || "0", 10) - parseInt(b.RefNo || "0", 10)
-      );
+      return a.Location.localeCompare(b.Location);
     });
     return arr.map((record, index) => ({ ...record, globalIndex: index }));
   }, [allRecords, selectedBranch, dateFilter, searchText]);
