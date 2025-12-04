@@ -288,7 +288,11 @@ const Admins = () => {
         createdAt: new Date().toISOString(),
       });
       closeCreate();
-      setSnack({ open: true, message: "Admin added", type: "success" });
+      setSnack({
+        open: true,
+        message: "New admin successfully added.",
+        type: "success",
+      });
     } catch (err) {
       setCreate((c) => ({ ...c, saving: false }));
       setSnack({
@@ -338,7 +342,11 @@ const Admins = () => {
         createdAt: "",
         saving: false,
       });
-      setSnack({ open: true, message: "Admin updated", type: "success" });
+      setSnack({
+        open: true,
+        message: "Admin details successfully updated.",
+        type: "success",
+      });
     } catch (err) {
       console.error(err);
       setEdit((prev) => ({ ...prev, saving: false }));
@@ -397,7 +405,11 @@ const Admins = () => {
       } catch {}
 
       await remove(ref(db, `admins/${mobile}`));
-      setSnack({ open: true, message: "Admin deleted", type: "success" });
+      setSnack({
+        open: true,
+        message: "Admin successfully removed.",
+        type: "success",
+      });
     } catch (err) {
       console.error(err);
       setSnack({
