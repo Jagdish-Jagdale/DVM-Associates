@@ -272,7 +272,7 @@ const SuperAdminDashboard = () => {
       },
       title: {
         display: true,
-        text: "Branch Performance Overview",
+        text: "Branch Performance Overview By Branch",
         font: {
           size: windowWidth < 640 ? 11 : windowWidth < 1024 ? 14 : 16,
           weight: "bold",

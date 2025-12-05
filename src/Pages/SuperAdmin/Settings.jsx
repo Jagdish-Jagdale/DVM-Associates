@@ -344,9 +344,18 @@ const Settings = () => {
                 <input
                   autoFocus
                   value={form.name}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, name: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Only allow letters and spaces
+                    const filtered = value.replace(/[^A-Za-z\s]/g, "");
+                    setForm((prev) => ({ ...prev, name: filtered }));
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent non-alphabetic characters from being entered
+                    if (!/[A-Za-z\s]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
                   placeholder={`Enter ${
                     selected === "branches"
                       ? "branch"
@@ -432,12 +441,21 @@ const Settings = () => {
                 <input
                   autoFocus
                   value={edit.row?.name || ""}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Only allow letters and spaces
+                    const filtered = value.replace(/[^A-Za-z\s]/g, "");
                     setEdit((prev) => ({
                       ...prev,
-                      row: { ...(prev.row || {}), name: e.target.value },
-                    }))
-                  }
+                      row: { ...(prev.row || {}), name: filtered },
+                    }));
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent non-alphabetic characters from being entered
+                    if (!/[A-Za-z\s]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
                   placeholder={`Enter ${
                     selected === "branches"
                       ? "branch"
@@ -468,7 +486,7 @@ const Settings = () => {
                   edit.saving ? "opacity-60" : "hover:bg-indigo-700"
                 }`}
               >
-                {edit.saving ? "Saving..." : "Save"}
+                {edit.saving ? "Updating..." : "Update"}
               </button>
             </div>
           </form>

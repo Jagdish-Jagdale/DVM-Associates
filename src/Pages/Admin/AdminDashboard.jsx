@@ -437,6 +437,19 @@ const Admin = () => {
           <div className="bg-white p-6 rounded-lg shadow flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-gray-700 mb-1">
+                Pending Records
+              </h3>
+              <p className="text-3xl font-bold text-amber-500">
+                {stats.pendingCount}
+              </p>
+            </div>
+            <div className="p-3 rounded-full bg-amber-100">
+              <FiClock className="text-amber-500" size={28} />
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-1">
                 Cancelled Cases
               </h3>
               <p className="text-3xl font-bold text-red-500">
@@ -445,19 +458,6 @@ const Admin = () => {
             </div>
             <div className="p-3 rounded-full bg-red-100">
               <FiAlertTriangle className="text-red-500" size={28} />
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-1">
-                Pending
-              </h3>
-              <p className="text-3xl font-bold text-amber-500">
-                {stats.pendingCount}
-              </p>
-            </div>
-            <div className="p-3 rounded-full bg-amber-100">
-              <FiClock className="text-amber-500" size={28} />
             </div>
           </div>
         </div>

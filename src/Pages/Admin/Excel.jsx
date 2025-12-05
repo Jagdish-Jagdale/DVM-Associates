@@ -21,6 +21,7 @@ import {
   FiSearch,
   FiAlertTriangle,
   FiStar,
+  FiEdit,
 } from "react-icons/fi";
 import PageHeader from "../../Components/UI/PageHeader.jsx";
 import SearchActionsCard from "../../Components/UI/SearchActionsCard.jsx";
@@ -227,6 +228,8 @@ const TableRow = memo(
     serverMonth,
     serverYearPair,
     isComplete,
+    editingRows,
+    onToggleEdit,
   }) => {
     const isNoFee = record.ReceivedOn === "No Fee";
     const rowClass = isNoFee
@@ -234,6 +237,17 @@ const TableRow = memo(
       : index % 2 === 0
       ? "bg-white"
       : "bg-gray-50";
+
+    const isSaved = !record.__local && !record.__dirty;
+    const isEditing = editingRows.has(record.globalIndex);
+
+    // Check if record was created by SuperAdmin
+    const createdBySuperAdmin =
+      String(record.createdByRole || "").toLowerCase() === "superadmin";
+
+    // Make row read-only if created by SuperAdmin OR if it's saved and not being edited
+    const isReadOnly =
+      readOnlyRow || createdBySuperAdmin || (isSaved && !isEditing);
 
     const renderInput = (field) => {
       const err =
@@ -243,22 +257,39 @@ const TableRow = memo(
           ? " border-red-500 ring-1 ring-red-500 bg-red-50"
           : "";
       if (field === "Action") {
-        const show =
+        // Don't show any action buttons for SuperAdmin created records
+        if (createdBySuperAdmin) return null;
+
+        const showSave =
           !!record.__dirty &&
           !readOnlyRow &&
           record.Location === groupRecords[0]?.Location;
-        if (!show) return null;
-        const isUpdate = !record.__local && record.RefNo;
+        const showEdit = isSaved && !isEditing && !readOnlyRow;
+
+        if (!showSave && !showEdit) return null;
+
         return (
           <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => onSaveRow(record.globalIndex)}
-              aria-label={isUpdate ? "Update" : "Save"}
-              title={isUpdate ? "Update" : "Save"}
-              className={`p-2 rounded-full bg-amber-600 text-white hover:bg-amber-700`}
-            >
-              <FiSave className="text-base" />
-            </button>
+            {showSave && (
+              <button
+                onClick={() => onSaveRow(record.globalIndex)}
+                aria-label={!record.__local && record.RefNo ? "Update" : "Save"}
+                title={!record.__local && record.RefNo ? "Update" : "Save"}
+                className="p-2 rounded-full bg-amber-600 text-white hover:bg-amber-700"
+              >
+                <FiSave className="text-base" />
+              </button>
+            )}
+            {showEdit && (
+              <button
+                onClick={() => onToggleEdit(record.globalIndex)}
+                aria-label="Edit"
+                title="Edit"
+                className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+              >
+                <FiEdit className="text-base" />
+              </button>
+            )}
           </div>
         );
       }
@@ -270,7 +301,7 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.checked)
             }
-            disabled={readOnlyRow}
+            disabled={isReadOnly}
             className="h-4 w-4 block mx-auto"
           />
         );
@@ -283,8 +314,10 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={readOnlyRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm${err}`}
+            disabled={isReadOnly}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${
+              isReadOnly ? " bg-gray-100" : ""
+            }${err}`}
           />
         );
       }
@@ -302,7 +335,7 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={readOnlyRow}
+            disabled={isReadOnly}
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
           />
         );
@@ -346,7 +379,7 @@ const TableRow = memo(
               const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
               onChangeField(record.globalIndex, field, digits);
             }}
-            readOnly={readOnlyRow}
+            readOnly={isReadOnly}
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
           />
         );
@@ -362,7 +395,7 @@ const TableRow = memo(
               const input = e.target.value.toUpperCase().slice(0, 15);
               onChangeField(record.globalIndex, field, input);
             }}
-            readOnly={readOnlyRow}
+            readOnly={isReadOnly}
             className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
           />
         );
@@ -385,8 +418,10 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={readOnlyRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white`}
+            disabled={isReadOnly}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${
+              isReadOnly ? " bg-gray-100" : " bg-white"
+            }`}
           >
             <option value="">
               Select {field.replace(/([A-Z])/g, " $1").trim()}
@@ -406,8 +441,10 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={readOnlyRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
+            disabled={isReadOnly}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${
+              isReadOnly ? " bg-gray-100" : " bg-white"
+            }${err}`}
           >
             <option value="">
               Select {field.replace(/([A-Z])/g, " $1").trim()}
@@ -427,8 +464,10 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={readOnlyRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm bg-white`}
+            disabled={isReadOnly}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${
+              isReadOnly ? " bg-gray-100" : " bg-white"
+            }`}
           >
             <option value="">Select Received On</option>
             {(dropdownOptions[field] || []).map((o) => (
@@ -525,8 +564,10 @@ const TableRow = memo(
           onChange={(e) =>
             onChangeField(record.globalIndex, field, e.target.value)
           }
-          readOnly={readOnlyRow}
-          className={`w-full p-2 border border-gray-300 rounded text-sm bg-white${err}`}
+          readOnly={isReadOnly}
+          className={`w-full p-2 border border-gray-300 rounded text-sm${
+            isReadOnly ? " bg-gray-100" : " bg-white"
+          }${err}`}
         />
       );
     };
@@ -958,6 +999,7 @@ const Excel = () => {
     [requiredFields]
   );
   const [validationMap, setValidationMap] = useState({});
+  const [editingRows, setEditingRows] = useState(new Set());
 
   const formatRefDisplay = useCallback((rec) => {
     const refStr = (rec && (rec.RefNo || rec.committedRefNo)) || "";
@@ -1438,6 +1480,13 @@ const Excel = () => {
       try {
         await saveRecords(complete);
 
+        // Clear editing state for saved rows
+        setEditingRows((prev) => {
+          const next = new Set(prev);
+          complete.forEach((rec) => next.delete(rec.globalIndex));
+          return next;
+        });
+
         setSuccessSnack({
           open: true,
           message: `${count} record${count > 1 ? "s" : ""} saved successfully`,
@@ -1455,6 +1504,18 @@ const Excel = () => {
     },
     [saveRecords, isRecordComplete, getMissingFields]
   );
+
+  const handleToggleEdit = useCallback((globalIndex) => {
+    setEditingRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(globalIndex)) {
+        next.delete(globalIndex);
+      } else {
+        next.add(globalIndex);
+      }
+      return next;
+    });
+  }, []);
 
   const handleSaveAll = useCallback(() => {
     // Filter records that have changes
@@ -2008,6 +2069,8 @@ const Excel = () => {
                         serverMonth={serverMonth}
                         serverYearPair={yearPair}
                         isComplete={isRecordComplete(rec)}
+                        editingRows={editingRows}
+                        onToggleEdit={handleToggleEdit}
                       />
                     );
                   })
@@ -2024,7 +2087,6 @@ const Excel = () => {
                 )}
               </tbody>
             </table>
-            {false && <div />}
           </div>
           {confirmVisible && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">

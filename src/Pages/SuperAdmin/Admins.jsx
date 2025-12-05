@@ -678,9 +678,18 @@ const Admins = () => {
                 <input
                   placeholder="Enter admin name"
                   value={create.name}
-                  onChange={(e) =>
-                    setCreate((c) => ({ ...c, name: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Only allow letters and spaces
+                    const filtered = value.replace(/[^A-Za-z\s]/g, "");
+                    setCreate((c) => ({ ...c, name: filtered }));
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent non-alphabetic characters from being entered
+                    if (!/[A-Za-z\s]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
                 />
@@ -917,9 +926,18 @@ const Admins = () => {
                 </label>
                 <input
                   value={edit.name}
-                  onChange={(e) =>
-                    setEdit((prev) => ({ ...prev, name: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Only allow letters and spaces
+                    const filtered = value.replace(/[^A-Za-z\s]/g, "");
+                    setEdit((prev) => ({ ...prev, name: filtered }));
+                  }}
+                  onKeyPress={(e) => {
+                    // Prevent non-alphabetic characters from being entered
+                    if (!/[A-Za-z\s]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
                   placeholder="Enter admin name"
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
