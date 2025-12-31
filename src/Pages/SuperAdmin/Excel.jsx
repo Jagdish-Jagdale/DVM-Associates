@@ -255,7 +255,7 @@ const TableRow = memo(
       const isReservedRow = record.isReserved;
 
       if (field === "Action") {
-        if (isReservedRow) return null; // Hide save button for reserved rows
+        // if (isReservedRow) return null; // Hide save button for reserved rows
 
         const showSave = !!record.__dirty;
         // In SuperAdmin, records are always "editable" if not reserved, but we might want an explicit toggle if following Admin pattern.
@@ -315,7 +315,7 @@ const TableRow = memo(
             type="checkbox"
             checked={!!record[field]}
             onChange={(e) =>
-              !isReservedRow && onChangeField(record.globalIndex, field, e.target.checked)
+              onChangeField(record.globalIndex, field, e.target.checked)
             }
             disabled={isReservedRow}
             className={`h-4 w-4 block mx-auto ${isReservedRow ? 'cursor-not-allowed opacity-60' : ''}`}
@@ -328,11 +328,9 @@ const TableRow = memo(
             type="date"
             value={formatDateForInput(record[field])}
             onChange={(e) =>
-              !isReservedRow && onChangeField(record.globalIndex, field, e.target.value)
+              onChangeField(record.globalIndex, field, e.target.value)
             }
-            readOnly={isReservedRow}
-            disabled={isReservedRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm${isReservedRow ? ' bg-gray-100 cursor-not-allowed' : ''} ${err}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${isReservedRow ? ' bg-gray-100' : ''} ${err}`}
           />
         );
       }
@@ -348,11 +346,9 @@ const TableRow = memo(
             }}
             value={record[field] === 0 || record[field] ? record[field] : ""}
             onChange={(e) =>
-              !isReservedRow && onChangeField(record.globalIndex, field, e.target.value)
+              onChangeField(record.globalIndex, field, e.target.value)
             }
-            readOnly={isReservedRow}
-            disabled={isReservedRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}${err}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}${err}`}
           />
         );
       }
@@ -369,10 +365,10 @@ const TableRow = memo(
             }}
             value={record[field] === 0 || record[field] ? record[field] : ""}
             onChange={(e) =>
-              !isReservedRow && onChangeField(record.globalIndex, field, e.target.value)
+              onChangeField(record.globalIndex, field, e.target.value)
             }
             readOnly={ro}
-            disabled={isReservedRow}
+            // disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${ro ? "bg-gray-100" : "bg-white"} ${isReservedRow ? 'cursor-not-allowed' : ''}
               }${err}`}
           />
@@ -412,13 +408,13 @@ const TableRow = memo(
             }}
             value={val}
             onChange={(e) => {
-              if (!isReservedRow) {
-                const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
-                onChangeField(record.globalIndex, field, digits);
-              }
+              // if (!isReservedRow) {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+              onChangeField(record.globalIndex, field, digits);
+              // }
             }}
-            readOnly={isReservedRow}
-            disabled={isReservedRow}
+            // readOnly={isReservedRow}
+            // disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}${err}`}
           />
         );
@@ -431,13 +427,13 @@ const TableRow = memo(
             value={val}
             maxLength={15}
             onChange={(e) => {
-              if (!isReservedRow) {
-                const input = e.target.value.toUpperCase().slice(0, 15);
-                onChangeField(record.globalIndex, field, input);
-              }
+              // if (!isReservedRow) {
+              const input = e.target.value.toUpperCase().slice(0, 15);
+              onChangeField(record.globalIndex, field, input);
+              // }
             }}
-            readOnly={isReservedRow}
-            disabled={isReservedRow}
+            // readOnly={isReservedRow}
+            // disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}${err}`}
           />
         );
@@ -458,10 +454,9 @@ const TableRow = memo(
           <select
             value={record[field] || ""}
             onChange={(e) =>
-              !isReservedRow && onChangeField(record.globalIndex, field, e.target.value)
+              onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={isReservedRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}`}
           >
             <option value="">
               Select {field.replace(/([A-Z])/g, " $1").trim()}
@@ -479,10 +474,9 @@ const TableRow = memo(
           <select
             value={record[field] || ""}
             onChange={(e) =>
-              !isReservedRow && onChangeField(record.globalIndex, field, e.target.value)
+              onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={isReservedRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}${err}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}${err}`}
           >
             <option value="">
               Select {field.replace(/([A-Z])/g, " $1").trim()}
@@ -500,10 +494,9 @@ const TableRow = memo(
           <select
             value={record[field] || ""}
             onChange={(e) =>
-              !isReservedRow && onChangeField(record.globalIndex, field, e.target.value)
+              onChangeField(record.globalIndex, field, e.target.value)
             }
-            disabled={isReservedRow}
-            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}`}
           >
             <option value="">Select Received On</option>
             {(dropdownOptions[field] || []).map((o) => (
@@ -590,11 +583,9 @@ const TableRow = memo(
           type="text"
           value={record[field] || ""}
           onChange={(e) =>
-            !isReservedRow && onChangeField(record.globalIndex, field, e.target.value)
+            onChangeField(record.globalIndex, field, e.target.value)
           }
-          readOnly={isReservedRow}
-          disabled={isReservedRow}
-          className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}${err}`}
+          className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}${err}`}
         />
       );
     };

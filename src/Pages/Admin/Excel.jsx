@@ -253,8 +253,8 @@ const TableRow = memo(
     // Check if record is a reserved row (should be read-only for Admin)
     const isReservedRow = !!(record.isReserved || record.reservedFirst);
 
-    // Make row read-only if it's reserved OR if `readOnlyRow` prop is true
-    const isReadOnly = readOnlyRow || isReservedRow;
+    // Make row read-only if `readOnlyRow` prop is true (removed isReservedRow check)
+    const isReadOnly = readOnlyRow;
 
     const renderInput = (field) => {
       const err =
@@ -264,8 +264,8 @@ const TableRow = memo(
           ? " border-red-500 ring-1 ring-red-500 bg-red-50"
           : "";
       if (field === "Action") {
-        // Don't show any action buttons for Reserved rows
-        if (isReservedRow) return null;
+        // Allow action buttons for Reserved rows now
+        // if (isReservedRow) return null;
 
         const showSave =
           !!record.__dirty &&

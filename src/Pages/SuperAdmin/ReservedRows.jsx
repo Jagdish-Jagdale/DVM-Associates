@@ -764,7 +764,14 @@ const ReservedRows = () => {
 
       if (field === "Amount" || field === "GST") {
         const amt = field === "Amount" ? Number(val) : Number(rec.Amount || 0);
-        const gst = field === "GST" ? Number(val) : Number(rec.GST || 0);
+        // Calculate 18% GST if Amount changed
+        let gst = field === "GST" ? Number(val) : Number(rec.GST || 0);
+
+        if (field === "Amount") {
+          gst = Number((amt * 0.18).toFixed(2));
+          updated.GST = gst;
+        }
+
         updated.Total = (amt + gst).toFixed(2);
       }
 
