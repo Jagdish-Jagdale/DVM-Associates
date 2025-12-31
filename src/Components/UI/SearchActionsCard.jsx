@@ -4,6 +4,7 @@ export default function SearchActionsCard({
   title = "Search & Actions",
   recordsCount = 0,
   recordsLabel = "records",
+  showTotal = true,
   rightPrimary = null,
   children,
   contentClassName,
@@ -13,9 +14,11 @@ export default function SearchActionsCard({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 mb-4">
         <h3 className="text-base font-semibold text-gray-800">{title}</h3>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto sm:justify-end">
-          <span className="text-sm text-gray-500">
-            Total {recordsLabel}: {recordsCount}
-          </span>
+          {showTotal && (
+            <span className="text-sm text-gray-500">
+              Total {recordsLabel}: {recordsCount}
+            </span>
+          )}
           {rightPrimary}
         </div>
       </div>

@@ -93,10 +93,20 @@ const locShortMap = {
 };
 const shortOf = (loc) => locShortMap[loc] || "SNGL";
 const getYearPair = (d = new Date()) => {
-  const y = d.getFullYear() % 100;
-  const next = (y + 1) % 100;
-  const f = (n) => n.toString().padStart(2, "0");
-  return `${f(y)}-${f(next)}`;
+  const m = d.getMonth(); // 0-11
+  const y = d.getFullYear();
+  let startYear = y;
+  let endYear = y + 1;
+
+  if (m < 3) {
+    // Jan, Feb, Mar -> previous FY
+    startYear = y - 1;
+    endYear = y;
+  }
+
+  const y1 = (startYear % 100).toString().padStart(2, "0");
+  const y2 = (endYear % 100).toString().padStart(2, "0");
+  return `${y1}-${y2}`;
 };
 const yearPairFromDate = (dateStr) => {
   if (!dateStr) return "";
@@ -167,15 +177,14 @@ const TableRow = memo(
         {headers.map((field) => (
           <td
             key={field}
-            className={`p-2 border border-gray-300 ${
-              ["SoftCopy", "Print", "VisitStatus"].includes(field)
-                ? "text-center align-middle"
-                : "align-top"
-            } ${minw(field)}`}
+            className={`p-2 border border-gray-300 ${["SoftCopy", "Print", "VisitStatus"].includes(field)
+              ? "text-center align-middle"
+              : "align-top"
+              } ${minw(field)}`}
           >
             {field === "SoftCopy" ||
-            field === "Print" ||
-            field === "VisitStatus" ? (
+              field === "Print" ||
+              field === "VisitStatus" ? (
               <input
                 type="checkbox"
                 id={`checkbox-${field}-${record.globalIndex}`}
@@ -212,75 +221,16 @@ const TableRow = memo(
                 className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100`}
               />
             ) : field === "Sr" ? (
-              (() => {
-                const reserved = !!localRecord.reservedFirst;
-                const anyData = [
-                  localRecord.Month,
-                  localRecord.VisitDate,
-                  localRecord.ReportDate,
-                  localRecord.TechnicalExecutive,
-                  localRecord.Bank,
-                  localRecord.Branch,
-                  localRecord.ClientName,
-                  localRecord.ClientContactNo,
-                  localRecord.Locations,
-                  localRecord.CaseInitiated,
-                  localRecord.Engineer,
-                  localRecord.ReportStatus,
-                  localRecord.BillStatus,
-                  localRecord.ReceivedOn,
-                  localRecord.RecdDate,
-                  localRecord.GSTNo,
-                  localRecord.Remark,
-                  localRecord.Amount,
-                  localRecord.GST,
-                  localRecord.Total,
-                  localRecord.SoftCopy,
-                  localRecord.Print,
-                  localRecord.VisitStatus,
-                ].some((v) => {
-                  if (typeof v === "boolean") return v;
-                  if (v === 0) return true;
-                  return String(v ?? "").trim() !== "";
-                });
-                const borderCls = reserved
-                  ? anyData
-                    ? "border-green-500"
-                    : "border-red-500"
-                  : "";
-                const titleText = reserved
-                  ? anyData
-                    ? "Reserved row saved"
-                    : "Reserved row not saved"
-                  : "";
-                return (
-                  <div
-                    className={`relative ${
-                      borderCls ? "border-l-[3px] rounded-l " + borderCls : ""
-                    }`}
-                    title={titleText}
-                  >
-                    {(() => {
-                      const bySuper =
-                        String(
-                          localRecord.createdByRole || ""
-                        ).toLowerCase() === "superadmin";
-                      const showStar = bySuper || !!localRecord.reservedFirst;
-                      return showStar ? (
-                        <FiStar className="absolute top-0 left-0 z-10 text-amber-500 text-[10px]" />
-                      ) : null;
-                    })()}
-                    <input
-                      type="text"
-                      id={`text-${field}-${record.globalIndex}`}
-                      name={field}
-                      value={String(index + 1)}
-                      readOnly
-                      className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100 text-center`}
-                    />
-                  </div>
-                );
-              })()
+              <div className="relative">
+                <input
+                  type="text"
+                  id={`text-${field}-${record.globalIndex}`}
+                  name={field}
+                  value={String(index + 1)}
+                  readOnly
+                  className={`w-full p-2 border border-gray-300 rounded text-sm bg-gray-100 text-center`}
+                />
+              </div>
             ) : field === "Month" ? (
               <input
                 type="text"
@@ -308,8 +258,8 @@ const TableRow = memo(
                 name={field}
                 value={
                   localRecord[field] === "" ||
-                  localRecord[field] === null ||
-                  typeof localRecord[field] === "undefined"
+                    localRecord[field] === null ||
+                    typeof localRecord[field] === "undefined"
                     ? ""
                     : `₹ ${formatCurrency(localRecord[field])}`
                 }
@@ -592,14 +542,14 @@ const Pending = () => {
         const iso2 = /^\d{4}-\d{2}-\d{2}$/.test(s2)
           ? s2
           : (function () {
-              if (!s2) return "";
-              const d = new Date(s2);
-              if (isNaN(d.getTime())) return "";
-              const yyyy = d.getFullYear();
-              const mm = String(d.getMonth() + 1).padStart(2, "0");
-              const dd = String(d.getDate()).padStart(2, "0");
-              return `${yyyy}-${mm}-${dd}`;
-            })();
+            if (!s2) return "";
+            const d = new Date(s2);
+            if (isNaN(d.getTime())) return "";
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            return `${yyyy}-${mm}-${dd}`;
+          })();
         return iso2 === dateFilter;
       });
     }
@@ -786,11 +736,10 @@ const Pending = () => {
                 <button
                   onClick={handleDownloadPending}
                   disabled={displayRecords.length === 0}
-                  className={`h-10 px-4 rounded-md inline-flex items-center gap-2 text-sm ${
-                    displayRecords.length === 0
-                      ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                      : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700"
-                  }`}
+                  className={`h-10 px-4 rounded-md inline-flex items-center gap-2 text-sm ${displayRecords.length === 0
+                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                    : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700"
+                    }`}
                   style={{
                     fontFamily:
                       "'Inter', 'Segoe UI', Roboto, Arial, 'Helvetica Neue', sans-serif",
@@ -841,56 +790,56 @@ const Pending = () => {
                       {header === "Sr"
                         ? "Sr No"
                         : header === "Month"
-                        ? "Month"
-                        : header === "OfficeNo"
-                        ? "Office"
-                        : header === "RefNo"
-                        ? "Ref No"
-                        : header === "VisitDate"
-                        ? "Visit Date"
-                        : header === "ReportDate"
-                        ? "Report Date"
-                        : header === "TechnicalExecutive"
-                        ? "Technical Executive"
-                        : header === "Bank"
-                        ? "Bank"
-                        : header === "Branch"
-                        ? "Branch"
-                        : header === "ClientName"
-                        ? "Client Name"
-                        : header === "ClientContactNo"
-                        ? "Contact"
-                        : header === "Locations"
-                        ? "Location"
-                        : header === "CaseInitiated"
-                        ? "Case Initiated"
-                        : header === "Engineer"
-                        ? "Engineer"
-                        : header === "VisitStatus"
-                        ? "Visit Status"
-                        : header === "ReportStatus"
-                        ? "Case Report Status"
-                        : header === "SoftCopy"
-                        ? "Soft Copy"
-                        : header === "Print"
-                        ? "Print"
-                        : header === "Amount"
-                        ? "Amount"
-                        : header === "GST"
-                        ? "GST"
-                        : header === "Total"
-                        ? "Total"
-                        : header === "BillStatus"
-                        ? "Bill Status"
-                        : header === "ReceivedOn"
-                        ? "Received On"
-                        : header === "RecdDate"
-                        ? "Received Date"
-                        : header === "GSTNo"
-                        ? "GST No"
-                        : header === "Remark"
-                        ? "Remark"
-                        : header}
+                          ? "Month"
+                          : header === "OfficeNo"
+                            ? "Office"
+                            : header === "RefNo"
+                              ? "Ref No"
+                              : header === "VisitDate"
+                                ? "Visit Date"
+                                : header === "ReportDate"
+                                  ? "Report Date"
+                                  : header === "TechnicalExecutive"
+                                    ? "Technical Executive"
+                                    : header === "Bank"
+                                      ? "Bank"
+                                      : header === "Branch"
+                                        ? "Branch"
+                                        : header === "ClientName"
+                                          ? "Client Name"
+                                          : header === "ClientContactNo"
+                                            ? "Contact"
+                                            : header === "Locations"
+                                              ? "Location"
+                                              : header === "CaseInitiated"
+                                                ? "Case Initiated"
+                                                : header === "Engineer"
+                                                  ? "Engineer"
+                                                  : header === "VisitStatus"
+                                                    ? "Visit Status"
+                                                    : header === "ReportStatus"
+                                                      ? "Case Report Status"
+                                                      : header === "SoftCopy"
+                                                        ? "Soft Copy"
+                                                        : header === "Print"
+                                                          ? "Print"
+                                                          : header === "Amount"
+                                                            ? "Amount"
+                                                            : header === "GST"
+                                                              ? "GST"
+                                                              : header === "Total"
+                                                                ? "Total"
+                                                                : header === "BillStatus"
+                                                                  ? "Bill Status"
+                                                                  : header === "ReceivedOn"
+                                                                    ? "Received On"
+                                                                    : header === "RecdDate"
+                                                                      ? "Received Date"
+                                                                      : header === "GSTNo"
+                                                                        ? "GST No"
+                                                                        : header === "Remark"
+                                                                          ? "Remark"
+                                                                          : header}
                     </th>
                   ))}
                 </tr>

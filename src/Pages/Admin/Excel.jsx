@@ -21,7 +21,6 @@ import {
   FiSearch,
   FiAlertTriangle,
   FiStar,
-  FiEdit,
 } from "react-icons/fi";
 import PageHeader from "../../Components/UI/PageHeader.jsx";
 import SearchActionsCard from "../../Components/UI/SearchActionsCard.jsx";
@@ -50,10 +49,20 @@ const codeToNameMap = defaultLocations.reduce(
 );
 
 const getYearPair = (d = new Date()) => {
-  const y = d.getFullYear() % 100;
-  const next = (y + 1) % 100;
-  const f = (n) => n.toString().padStart(2, "0");
-  return `${f(y)}-${f(next)}`;
+  const m = d.getMonth(); // 0-11
+  const y = d.getFullYear();
+  let startYear = y;
+  let endYear = y + 1;
+
+  if (m < 3) {
+    // Jan, Feb, Mar -> previous FY
+    startYear = y - 1;
+    endYear = y;
+  }
+
+  const y1 = (startYear % 100).toString().padStart(2, "0");
+  const y2 = (endYear % 100).toString().padStart(2, "0");
+  return `${y1}-${y2}`;
 };
 
 const yearPairFromDate = (dateStr) => {
@@ -235,38 +244,35 @@ const TableRow = memo(
     const rowClass = isNoFee
       ? "bg-red-500 text-white"
       : index % 2 === 0
-      ? "bg-white"
-      : "bg-gray-50";
+        ? "bg-white"
+        : "bg-gray-50";
 
     const isSaved = !record.__local && !record.__dirty;
     const isEditing = editingRows.has(record.globalIndex);
 
-    // Check if record was created by SuperAdmin
-    const createdBySuperAdmin =
-      String(record.createdByRole || "").toLowerCase() === "superadmin";
+    // Check if record is a reserved row (should be read-only for Admin)
+    const isReservedRow = !!(record.isReserved || record.reservedFirst);
 
-    // Make row read-only if created by SuperAdmin OR if it's saved and not being edited
-    const isReadOnly =
-      readOnlyRow || createdBySuperAdmin || (isSaved && !isEditing);
+    // Make row read-only if it's reserved OR if `readOnlyRow` prop is true
+    const isReadOnly = readOnlyRow || isReservedRow;
 
     const renderInput = (field) => {
       const err =
         missingFields &&
-        typeof missingFields.has === "function" &&
-        missingFields.has(field)
+          typeof missingFields.has === "function" &&
+          missingFields.has(field)
           ? " border-red-500 ring-1 ring-red-500 bg-red-50"
           : "";
       if (field === "Action") {
-        // Don't show any action buttons for SuperAdmin created records
-        if (createdBySuperAdmin) return null;
+        // Don't show any action buttons for Reserved rows
+        if (isReservedRow) return null;
 
         const showSave =
           !!record.__dirty &&
           !readOnlyRow &&
           record.Location === groupRecords[0]?.Location;
-        const showEdit = isSaved && !isEditing && !readOnlyRow;
 
-        if (!showSave && !showEdit) return null;
+        if (!showSave) return null;
 
         return (
           <div className="flex items-center justify-center gap-2">
@@ -278,16 +284,6 @@ const TableRow = memo(
                 className="p-2 rounded-full bg-amber-600 text-white hover:bg-amber-700"
               >
                 <FiSave className="text-base" />
-              </button>
-            )}
-            {showEdit && (
-              <button
-                onClick={() => onToggleEdit(record.globalIndex)}
-                aria-label="Edit"
-                title="Edit"
-                className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700"
-              >
-                <FiEdit className="text-base" />
               </button>
             )}
           </div>
@@ -315,9 +311,8 @@ const TableRow = memo(
               onChangeField(record.globalIndex, field, e.target.value)
             }
             disabled={isReadOnly}
-            className={`w-full p-2 border border-gray-300 rounded text-sm${
-              isReadOnly ? " bg-gray-100" : ""
-            }${err}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${isReadOnly ? " bg-gray-100" : ""
+              }${err}`}
           />
         );
       }
@@ -356,9 +351,8 @@ const TableRow = memo(
               onChangeField(record.globalIndex, field, e.target.value)
             }
             readOnly={ro}
-            className={`w-full p-2 border border-gray-300 rounded text-sm ${
-              ro ? "bg-gray-100" : "bg-white"
-            }${err}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm ${ro ? "bg-gray-100" : "bg-white"
+              }${err}`}
           />
         );
       }
@@ -419,9 +413,8 @@ const TableRow = memo(
               onChangeField(record.globalIndex, field, e.target.value)
             }
             disabled={isReadOnly}
-            className={`w-full p-2 border border-gray-300 rounded text-sm${
-              isReadOnly ? " bg-gray-100" : " bg-white"
-            }`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${isReadOnly ? " bg-gray-100" : " bg-white"
+              }`}
           >
             <option value="">
               Select {field.replace(/([A-Z])/g, " $1").trim()}
@@ -442,9 +435,8 @@ const TableRow = memo(
               onChangeField(record.globalIndex, field, e.target.value)
             }
             disabled={isReadOnly}
-            className={`w-full p-2 border border-gray-300 rounded text-sm${
-              isReadOnly ? " bg-gray-100" : " bg-white"
-            }${err}`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${isReadOnly ? " bg-gray-100" : " bg-white"
+              }${err}`}
           >
             <option value="">
               Select {field.replace(/([A-Z])/g, " $1").trim()}
@@ -465,9 +457,8 @@ const TableRow = memo(
               onChangeField(record.globalIndex, field, e.target.value)
             }
             disabled={isReadOnly}
-            className={`w-full p-2 border border-gray-300 rounded text-sm${
-              isReadOnly ? " bg-gray-100" : " bg-white"
-            }`}
+            className={`w-full p-2 border border-gray-300 rounded text-sm${isReadOnly ? " bg-gray-100" : " bg-white"
+              }`}
           >
             <option value="">Select Received On</option>
             {(dropdownOptions[field] || []).map((o) => (
@@ -494,31 +485,8 @@ const TableRow = memo(
         );
       }
       if (field === "Sr") {
-        const isReservedTop = record.globalIndex === -1;
-        const showReserved = isReservedTop || !!record.reservedFirst;
-        const borderCls = showReserved
-          ? isComplete
-            ? "border-green-500"
-            : "border-red-500"
-          : "";
-        const titleText = showReserved
-          ? isComplete
-            ? "Reserved row complete"
-            : "Reserved row incomplete"
-          : "";
-        const bySuper =
-          String(record.createdByRole || "").toLowerCase() === "superadmin";
-        const showStar = bySuper || !!record.reservedFirst;
         return (
-          <div
-            className={`relative ${
-              borderCls ? "border-l-[3px] rounded-l " + borderCls : ""
-            }`}
-            title={titleText}
-          >
-            {showStar && (
-              <FiStar className="absolute top-0 left-0 z-10 text-amber-500 text-[10px]" />
-            )}
+          <div className="relative">
             {showDelete && (
               <button
                 type="button"
@@ -565,9 +533,8 @@ const TableRow = memo(
             onChangeField(record.globalIndex, field, e.target.value)
           }
           readOnly={isReadOnly}
-          className={`w-full p-2 border border-gray-300 rounded text-sm${
-            isReadOnly ? " bg-gray-100" : " bg-white"
-          }${err}`}
+          className={`w-full p-2 border border-gray-300 rounded text-sm${isReadOnly ? " bg-gray-100" : " bg-white"
+            }${err}`}
         />
       );
     };
@@ -579,9 +546,8 @@ const TableRow = memo(
           return (
             <td
               key={h}
-              className={`p-2 border border-gray-300 ${
-                isCB ? "text-center align-middle" : "align-top"
-              } ${minw(h)}`}
+              className={`p-2 border border-gray-300 ${isCB ? "text-center align-middle" : "align-top"
+                } ${minw(h)}`}
             >
               {renderInput(h)}
             </td>
@@ -640,7 +606,7 @@ const Excel = () => {
     return () => {
       try {
         unsubs.forEach((u) => u());
-      } catch {}
+      } catch { }
     };
   }, []);
 
@@ -833,20 +799,25 @@ const Excel = () => {
 
     // Check if reserved row already exists in excel_records for this date and location
     const existingReserved = records.find((r) => {
-      const locMatch = (r.Location === "PCMC" ? "Pune" : r.Location) === loc;
+      const actualLoc = r.Location === "PCMC" ? "Pune" : r.Location;
+      const locMatch = actualLoc === loc || r.Branch === loc;
       if (!locMatch) return false;
+
+      // Filter by adminBranch (authBranch)
+      if (authBranch && r.Branch && r.Branch !== authBranch) return false;
+
       const s2 = String(r.createdAt || "").trim();
       const iso2 = /^\d{4}-\d{2}-\d{2}$/.test(s2)
         ? s2
         : (function () {
-            if (!s2) return "";
-            const d = new Date(s2);
-            if (isNaN(d.getTime())) return "";
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, "0");
-            const dd = String(d.getDate()).padStart(2, "0");
-            return `${yyyy}-${mm}-${dd}`;
-          })();
+          if (!s2) return "";
+          const d = new Date(s2);
+          if (isNaN(d.getTime())) return "";
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          return `${yyyy}-${mm}-${dd}`;
+        })();
       return r.reservedFirst && iso2 === dateFilter;
     });
 
@@ -1015,7 +986,7 @@ const Excel = () => {
         const data = snap.val() || {};
         const out = [];
         Object.keys(data).forEach((k) => {
-          const m = k.match(/^DVM-([A-Z]{3,5})-(\d{2}-\d{2})-(\d{3})$/);
+          const m = k.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})-(\d+)$/);
           if (!m) return;
           const sf = m[1];
           const refNo = m[3];
@@ -1344,24 +1315,47 @@ const Excel = () => {
 
       const snap = await get(ref(db, "excel_records"));
       const keys = Object.keys(snap.val() || {});
-      const usedByYP = new Map();
+      const maxRefNoByYP = new Map();
+
+      // Check existing keys in DB
       keys.forEach((k) => {
-        const m = k.match(/^DVM-[A-Z]{3,5}-(\d{2}-\d{2})-(\d{3})$/);
-        if (!m) return;
+        // Match standard format OR reserved format if it contains RefNo
+        // Try DVM-XXX-YY-YY-NNN
+        const m = k.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})-(\d+)$/);
+        if (!m) {
+          // Try DVM-RESERVED-YY-YY-NNN or other variations if they exist
+          // The reserved key logic in SuperAdmin uses DVM-LOC-YY-YY-NNN, so it should be covered by above.
+          // Just to be safe, we rely on the value if needed, but keys are faster.
+          // Let's assume the key format is reliable designated in saveReservedRow:
+          // `DVM-${shortOf(locName)}-${yp}-${committed}`
+          // So the regex above is correct.
+          return;
+        }
         const yp = m[1];
         const n = parseInt(m[2], 10);
-        if (!usedByYP.has(yp)) usedByYP.set(yp, new Set());
-        usedByYP.get(yp).add(n);
+        const currentMax = maxRefNoByYP.get(yp) || 0;
+        if (n > currentMax) maxRefNoByYP.set(yp, n);
       });
+
       // include numbers already present in local state
       records.forEach((r) => {
         const yp = yearPairForRecord(r);
         const n = parseInt(r.RefNo, 10);
         if (!isNaN(n)) {
-          if (!usedByYP.has(yp)) usedByYP.set(yp, new Set());
-          usedByYP.get(yp).add(n);
+          const currentMax = maxRefNoByYP.get(yp) || 0;
+          if (n > currentMax) maxRefNoByYP.set(yp, n);
         }
       });
+
+      // Include reservedRow if it exists and has a RefNo
+      if (reservedRow && reservedRow.committedRefNo) {
+        const yp = yearPairFromDate(dateFilter) || yearPair;
+        const n = parseInt(reservedRow.committedRefNo, 10);
+        if (!isNaN(n)) {
+          const currentMax = maxRefNoByYP.get(yp) || 0;
+          if (n > currentMax) maxRefNoByYP.set(yp, n);
+        }
+      }
 
       const assignedInBatch = new Map();
       const enriched = complete.map((r) => {
@@ -1369,13 +1363,12 @@ const Excel = () => {
         const loc = r.Location === "PCMC" ? "Pune" : r.Location;
         let refNoStr = r.RefNo;
         if (!refNoStr) {
-          const s = usedByYP.get(yp) || new Set();
-          const sb = assignedInBatch.get(yp) || new Set();
-          let n = 1;
-          while (s.has(n) || sb.has(n)) n++;
-          refNoStr = n.toString().padStart(3, "0");
-          sb.add(n);
-          assignedInBatch.set(yp, sb);
+          const currentMax = maxRefNoByYP.get(yp) || 0;
+          const batchOffset = assignedInBatch.get(yp) || 0;
+          const nextVal = Math.max(currentMax, 6500) + batchOffset + 1;
+
+          refNoStr = nextVal.toString().padStart(3, "0");
+          assignedInBatch.set(yp, batchOffset + 1);
         }
         const officeNo = `DVM/${shortOf(loc)}/${yp}`;
         const amt = Math.max(0, Number(r.Amount) || 0);
@@ -1563,26 +1556,26 @@ const Excel = () => {
         const iso1 = /^\d{4}-\d{2}-\d{2}$/.test(s1)
           ? s1
           : (function () {
-              const m = s1.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
-              if (!m) return "";
-              const dd = m[1].padStart(2, "0");
-              const mm = m[2].padStart(2, "0");
-              let yy = m[3];
-              if (yy.length === 2) yy = (2000 + parseInt(yy, 10)).toString();
-              return `${yy}-${mm}-${dd}`;
-            })();
+            const m = s1.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+            if (!m) return "";
+            const dd = m[1].padStart(2, "0");
+            const mm = m[2].padStart(2, "0");
+            let yy = m[3];
+            if (yy.length === 2) yy = (2000 + parseInt(yy, 10)).toString();
+            return `${yy}-${mm}-${dd}`;
+          })();
         const s2 = String(r.createdAt || "").trim();
         const iso2 = /^\d{4}-\d{2}-\d{2}$/.test(s2)
           ? s2
           : (function () {
-              if (!s2) return "";
-              const d = new Date(s2);
-              if (isNaN(d.getTime())) return "";
-              const yyyy = d.getFullYear();
-              const mm = String(d.getMonth() + 1).padStart(2, "0");
-              const dd = String(d.getDate()).padStart(2, "0");
-              return `${yyyy}-${mm}-${dd}`;
-            })();
+            if (!s2) return "";
+            const d = new Date(s2);
+            if (isNaN(d.getTime())) return "";
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            return `${yyyy}-${mm}-${dd}`;
+          })();
         if (iso2) return iso2 === dateFilter;
         if (iso1) return iso1 === dateFilter;
         return false;
@@ -1646,80 +1639,9 @@ const Excel = () => {
   ]);
 
   const displayRows = useMemo(() => {
-    // Skip reserved/synthetic row for any Sunday date
-    if (!selectedLocation || !dateFilter) return filtered;
-    if (isYmdSunday(dateFilter)) return filtered;
-
-    // Always show reserved row at top if we have one
-    if (reservedRow) {
-      // Check if reserved row has data (is filled)
-      const reservedHasData = [
-        reservedRow.VisitDate,
-        reservedRow.ReportDate,
-        reservedRow.TechnicalExecutive,
-        reservedRow.Bank,
-        reservedRow.Branch,
-        reservedRow.ClientName,
-        reservedRow.ClientContactNo,
-        reservedRow.Locations,
-        reservedRow.CaseInitiated,
-        reservedRow.Engineer,
-        reservedRow.ReportStatus,
-        reservedRow.BillStatus,
-        reservedRow.ReceivedOn,
-        reservedRow.RecdDate,
-        reservedRow.GSTNo,
-        reservedRow.Remark,
-        reservedRow.Amount,
-        reservedRow.FMV,
-      ].some((v) => {
-        if (typeof v === "boolean") return v;
-        if (typeof v === "number") return v > 0;
-        const s = String(v ?? "").trim();
-        if (s === "" || s === "0" || s === "0.0" || s === "0.00") return false;
-        return true;
-      });
-
-      // Remove the reserved row from filtered to avoid duplicates
-      const filteredNoDup =
-        reservedRow.committedRefNo || reservedRow.RefNo
-          ? filtered.filter((r) => {
-              const refToCheck =
-                reservedRow.committedRefNo || reservedRow.RefNo;
-              return parseInt(r.RefNo, 10) !== parseInt(refToCheck, 10);
-            })
-          : filtered;
-
-      // If reserved row is empty, keep it at top
-      if (!reservedHasData) {
-        return [reservedRow, ...filteredNoDup];
-      }
-
-      // If reserved row has data, merge and sort by RefNo descending
-      const merged = [reservedRow, ...filteredNoDup];
-      merged.sort((a, b) => {
-        const refA = parseInt(a.RefNo || a.committedRefNo || "0", 10);
-        const refB = parseInt(b.RefNo || b.committedRefNo || "0", 10);
-        if (refB !== refA) return refB - refA;
-        const ta = Date.parse(a.createdAt || "") || 0;
-        const tb = Date.parse(b.createdAt || "") || 0;
-        if (tb !== ta) return tb - ta;
-        return a.Location.localeCompare(b.Location);
-      });
-      return merged;
-    }
-
-    // No reserved row (shouldn't happen with new logic, but fallback)
+    // Reserved row logic removed as per request.
     return filtered;
-  }, [
-    filtered,
-    selectedLocation,
-    dateFilter,
-    yearPair,
-    reservedRow,
-    isYmdSunday,
-    serverDate,
-  ]);
+  }, [filtered]);
 
   useEffect(() => {
     const update = () => {
@@ -1850,11 +1772,10 @@ const Excel = () => {
                   title="Add Data"
                   onClick={() => handleAddRecord(selectedLocation)}
                   disabled={!selectedLocation || dateFilter !== todayYmd}
-                  className={`px-3 py-2 rounded-md text-sm flex items-center gap-2 ${
-                    !selectedLocation || dateFilter !== todayYmd
-                      ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                      : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
+                  className={`px-3 py-2 rounded-md text-sm flex items-center gap-2 ${!selectedLocation || dateFilter !== todayYmd
+                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                    : "bg-green-600 text-white hover:bg-green-700"
+                    }`}
                 >
                   <FiPlus />
                   <span className="hidden sm:inline">Add Data</span>
@@ -1864,11 +1785,10 @@ const Excel = () => {
                   title="Save All"
                   onClick={handleSaveAll}
                   disabled={!canSaveAll}
-                  className={`px-3 py-2 rounded-md text-sm ${
-                    !canSaveAll
-                      ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                      : "bg-amber-600 text-white hover:bg-amber-700"
-                  }`}
+                  className={`px-3 py-2 rounded-md text-sm ${!canSaveAll
+                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                    : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
                 >
                   Save All
                 </button>
@@ -1878,11 +1798,10 @@ const Excel = () => {
                   aria-label="Download"
                   onClick={() => downloadFor(selectedLocation || "All")}
                   disabled={filtered.length === 0}
-                  className={`px-3 py-2 rounded-md flex items-center gap-2 text-sm ${
-                    filtered.length === 0
-                      ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                      : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700"
-                  }`}
+                  className={`px-3 py-2 rounded-md flex items-center gap-2 text-sm ${filtered.length === 0
+                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                    : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700"
+                    }`}
                   style={{
                     fontFamily:
                       "'Inter', 'Segoe UI', Roboto, Arial, 'Helvetica Neue', sans-serif",
@@ -1931,33 +1850,30 @@ const Excel = () => {
                 <button
                   type="button"
                   onClick={() => setSortBy("all")}
-                  className={`px-3 py-2 text-sm border-r ${
-                    sortBy === "all"
-                      ? "bg-indigo-50 text-indigo-700"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
+                  className={`px-3 py-2 text-sm border-r ${sortBy === "all"
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-gray-700 hover:bg-gray-50"
+                    }`}
                 >
                   All
                 </button>
                 <button
                   type="button"
                   onClick={() => setSortBy("pending")}
-                  className={`px-3 py-2 text-sm border-r ${
-                    sortBy === "pending"
-                      ? "bg-indigo-50 text-indigo-700"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
+                  className={`px-3 py-2 text-sm border-r ${sortBy === "pending"
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-gray-700 hover:bg-gray-50"
+                    }`}
                 >
                   Pending
                 </button>
                 <button
                   type="button"
                   onClick={() => setSortBy("credit")}
-                  className={`px-3 py-2 text-sm ${
-                    sortBy === "credit"
-                      ? "bg-indigo-50 text-indigo-700"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
+                  className={`px-3 py-2 text-sm ${sortBy === "credit"
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-gray-700 hover:bg-gray-50"
+                    }`}
                 >
                   Credit
                 </button>
@@ -1985,58 +1901,58 @@ const Excel = () => {
                       {h === "Sr No"
                         ? "Sr No"
                         : h === "Month"
-                        ? "Month"
-                        : h === "OfficeNo"
-                        ? "Office"
-                        : h === "RefNo"
-                        ? "Ref No"
-                        : h === "VisitDate"
-                        ? "Visit Date"
-                        : h === "ReportDate"
-                        ? "Report Date"
-                        : h === "TechnicalExecutive"
-                        ? "Technical Executive"
-                        : h === "Bank"
-                        ? "Bank"
-                        : h === "Branch"
-                        ? "Branch"
-                        : h === "ClientName"
-                        ? "Client Name"
-                        : h === "ClientContactNo"
-                        ? "Contact"
-                        : h === "Locations"
-                        ? "Location"
-                        : h === "CaseInitiated"
-                        ? "Case Initiated"
-                        : h === "Engineer"
-                        ? "Engineer"
-                        : h === "VisitStatus"
-                        ? "Visit Status"
-                        : h === "ReportStatus"
-                        ? "Case Report Status"
-                        : h === "SoftCopy"
-                        ? "Soft Copy"
-                        : h === "Print"
-                        ? "Print"
-                        : h === "Amount"
-                        ? "Amount"
-                        : h === "GST"
-                        ? "GST (18%)"
-                        : h === "Total"
-                        ? "Total"
-                        : h === "BillStatus"
-                        ? "Bill Status"
-                        : h === "ReceivedOn"
-                        ? "Received On"
-                        : h === "RecdDate"
-                        ? "Received Date"
-                        : h === "GSTNo"
-                        ? "GST No"
-                        : h === "Remark"
-                        ? "Remark"
-                        : h === "Action"
-                        ? "Actions"
-                        : h}
+                          ? "Month"
+                          : h === "OfficeNo"
+                            ? "Office"
+                            : h === "RefNo"
+                              ? "Ref No"
+                              : h === "VisitDate"
+                                ? "Visit Date"
+                                : h === "ReportDate"
+                                  ? "Report Date"
+                                  : h === "TechnicalExecutive"
+                                    ? "Technical Executive"
+                                    : h === "Bank"
+                                      ? "Bank"
+                                      : h === "Branch"
+                                        ? "Branch"
+                                        : h === "ClientName"
+                                          ? "Client Name"
+                                          : h === "ClientContactNo"
+                                            ? "Contact"
+                                            : h === "Locations"
+                                              ? "Location"
+                                              : h === "CaseInitiated"
+                                                ? "Case Initiated"
+                                                : h === "Engineer"
+                                                  ? "Engineer"
+                                                  : h === "VisitStatus"
+                                                    ? "Visit Status"
+                                                    : h === "ReportStatus"
+                                                      ? "Case Report Status"
+                                                      : h === "SoftCopy"
+                                                        ? "Soft Copy"
+                                                        : h === "Print"
+                                                          ? "Print"
+                                                          : h === "Amount"
+                                                            ? "Amount"
+                                                            : h === "GST"
+                                                              ? "GST (18%)"
+                                                              : h === "Total"
+                                                                ? "Total"
+                                                                : h === "BillStatus"
+                                                                  ? "Bill Status"
+                                                                  : h === "ReceivedOn"
+                                                                    ? "Received On"
+                                                                    : h === "RecdDate"
+                                                                      ? "Received Date"
+                                                                      : h === "GSTNo"
+                                                                        ? "GST No"
+                                                                        : h === "Remark"
+                                                                          ? "Remark"
+                                                                          : h === "Action"
+                                                                            ? "Actions"
+                                                                            : h}
                     </th>
                   ))}
                 </tr>
@@ -2091,18 +2007,16 @@ const Excel = () => {
           {confirmVisible && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div
-                className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
-                  confirmShowing ? "opacity-100" : "opacity-0"
-                }`}
+                className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${confirmShowing ? "opacity-100" : "opacity-0"
+                  }`}
               />
               <div
                 role="dialog"
                 aria-modal="true"
-                className={`relative bg-white rounded-lg shadow-lg p-6 w-full max-w-md transition-all duration-200 transform ${
-                  confirmShowing
-                    ? "opacity-100 scale-100 translate-y-0"
-                    : "opacity-0 scale-95 -translate-y-1"
-                }`}
+                className={`relative bg-white rounded-lg shadow-lg p-6 w-full max-w-md transition-all duration-200 transform ${confirmShowing
+                  ? "opacity-100 scale-100 translate-y-0"
+                  : "opacity-0 scale-95 -translate-y-1"
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <FiAlertTriangle className="text-amber-500 text-xl" />
@@ -2115,9 +2029,9 @@ const Excel = () => {
                     ? `You are about to save all changes.
 Please ensure that all entered data is correct before continuing.`
                     : confirmState.rowIndex === -1
-                    ? `You are about to save the reserved row.
+                      ? `You are about to save the reserved row.
 Please verify all fields before saving.`
-                    : `You are about to save changes to this row.
+                      : `You are about to save changes to this row.
 Please ensure the data is accurate before proceeding.`}
                 </p>
                 <div className="flex justify-end gap-2">
@@ -2139,10 +2053,10 @@ Please ensure the data is accurate before proceeding.`}
                         confirmState.scope === "all"
                           ? records.filter((r) => r.__dirty)
                           : [
-                              records.find(
-                                (r) => r.globalIndex === confirmState.rowIndex
-                              ),
-                            ].filter(Boolean);
+                            records.find(
+                              (r) => r.globalIndex === confirmState.rowIndex
+                            ),
+                          ].filter(Boolean);
                       setConfirmState({
                         open: false,
                         scope: "",
@@ -2159,11 +2073,10 @@ Please ensure the data is accurate before proceeding.`}
             </div>
           )}
           <div
-            className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg ring-1 ring-black/10 transition ${
-              successSnack.open
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 -translate-y-2 pointer-events-none"
-            } bg-green-600 text-white`}
+            className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg ring-1 ring-black/10 transition ${successSnack.open
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-2 pointer-events-none"
+              } bg-green-600 text-white`}
             role="alert"
             aria-live="polite"
           >
@@ -2180,11 +2093,10 @@ Please ensure the data is accurate before proceeding.`}
             </div>
           </div>
           <div
-            className={`fixed top-16 right-4 z-50 px-4 py-2 rounded-md shadow transition ${
-              errorSnack.open
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 -translate-y-2 pointer-events-none"
-            } bg-red-600 text-white`}
+            className={`fixed top-16 right-4 z-50 px-4 py-2 rounded-md shadow transition ${errorSnack.open
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-2 pointer-events-none"
+              } bg-red-600 text-white`}
             role="alert"
             aria-live="polite"
           >
@@ -2200,11 +2112,10 @@ Please ensure the data is accurate before proceeding.`}
             </div>
           </div>
           <div
-            className={`fixed top-28 right-4 z-50 px-4 py-2 rounded-lg shadow-lg ring-1 ring-black/10 transition ${
-              deleteSnack.open
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 -translate-y-2 pointer-events-none"
-            } bg-slate-800 text-white`}
+            className={`fixed top-28 right-4 z-50 px-4 py-2 rounded-lg shadow-lg ring-1 ring-black/10 transition ${deleteSnack.open
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-2 pointer-events-none"
+              } bg-slate-800 text-white`}
             role="status"
             aria-live="polite"
           >

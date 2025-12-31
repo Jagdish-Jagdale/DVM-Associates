@@ -75,72 +75,57 @@ const Login = ({ onLogin }) => {
     try {
       const email = formatEmail(mobile)
 
-      // Login: check RTDB first by phone + password
-      const adminRef = ref(db, `admins/${mobile}`)
-      const adminSnap = await get(adminRef)
-      if (adminSnap.exists()) {
-        const record = adminSnap.val()
-        if (record.password !== password) {
-          setError('Incorrect password.')
-          return
+      // 1. Authenticate via Firebase Auth
+      await signInWithEmailAndPassword(auth, email, password)
+
+      // 2. Determine Role from Realtime Database
+      // We don't need to check password again, Auth valid.
+      let role = null
+      let branch = null
+
+      let snap = await get(ref(db, `admins/${mobile}`))
+      if (snap.exists()) {
+        const val = snap.val()
+        role = 'admin' // Force 'admin' or read val.role if flexible
+        branch = val.branch
+      } else {
+        snap = await get(ref(db, `super_admins/${mobile}`))
+        if (snap.exists()) {
+          role = 'super-admin'
         }
-        const role = record.role === 'admin' ? 'admin' : 'super-admin'
-        setMobile('')
-        setPassword('')
-        setMobileError('')
-        try {
-          localStorage.setItem('authRole', role)
-          sessionStorage.setItem('authRole', role)
-          if (record.branch) {
-            localStorage.setItem('authBranch', record.branch)
-            sessionStorage.setItem('authBranch', record.branch)
-          }
-          localStorage.setItem('authMobile', mobile)
-          sessionStorage.setItem('authMobile', mobile)
-        } catch {}
-        onLogin && onLogin({ phone: mobile }, role)
-        navigate(role === 'admin' ? '/admin/dashboard' : '/super-admin', { replace: true })
+      }
+
+      if (!role) {
+        setError('Account authorized but user record not found.')
+        setIsLoading(false)
         return
       }
 
-      // If phone not found in DB, try Firebase Auth with email+password
+      setMobile('')
+      setPassword('')
+      setMobileError('')
+
       try {
-        await signInWithEmailAndPassword(auth, email, password)
-        setMobile('')
-        setPassword('')
-        setMobileError('')
-        try { localStorage.setItem('authRole', 'super-admin'); sessionStorage.setItem('authRole', 'super-admin') } catch {}
-        onLogin && onLogin({ phone: mobile }, 'super-admin')
-        navigate('/super-admin', { replace: true })
-      } catch (authError) {
-        switch (authError.code) {
-          case 'auth/user-not-found':
-            setError('No account found. Please sign up.')
-            break
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
-            setError('Invalid mobile number or password.')
-            break
-          case 'auth/too-many-requests':
-            setError('Too many attempts. Try again later.')
-            break
-          default:
-            setError(`Error: ${authError.message}`)
+        localStorage.setItem('authRole', role)
+        sessionStorage.setItem('authRole', role)
+        if (branch) {
+          localStorage.setItem('authBranch', branch)
+          sessionStorage.setItem('authBranch', branch)
         }
-      }
+        localStorage.setItem('authMobile', mobile)
+        sessionStorage.setItem('authMobile', mobile)
+      } catch { }
+
+      onLogin && onLogin({ phone: mobile }, role)
+      navigate(role === 'admin' ? '/admin/dashboard' : '/super-admin', { replace: true })
+
     } catch (error) {
+      console.error("Login Error:", error)
       switch (error.code) {
-        case 'auth/email-already-in-use':
-          setError('This mobile number is already registered. Try signing in.')
-          break
-        case 'auth/invalid-credential':
-          setError('Invalid mobile number or password.')
-          break
         case 'auth/user-not-found':
-          setError('No account found. Please sign up.')
-          break
+        case 'auth/invalid-credential':
         case 'auth/wrong-password':
-          setError('Incorrect password.')
+          setError('Invalid mobile number or password.')
           break
         case 'auth/too-many-requests':
           setError('Too many attempts. Try again later.')
@@ -156,18 +141,18 @@ const Login = ({ onLogin }) => {
   const canSubmit = dirty && validateMobile(mobile) && password.length >= 6 && !mobileError
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4" style={{fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif'}}>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4" style={{ fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif' }}>
       <form onSubmit={handleSubmit} className="w-full max-w-[420px] bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200 px-8 py-10">
         <div className="flex flex-col items-center mb-8">
-<div className="h-28 w-28 rounded-full shadow-sm bg-white ring-1 ring-gray-200 flex items-center justify-center p-2 mb-2">
-  <img
-    src={logo}
-    alt="DVM & Associates"
-    className="h-20 w-20 object-contain"
-    style={{ objectFit: 'contain' }}
-  />
-</div>
-          <h2 className="mt-1 text-2xl font-semibold text-gray-900" style={{fontFamily: 'Poppins, Inter, sans-serif'}}>Welcome back</h2>
+          <div className="h-28 w-28 rounded-full shadow-sm bg-white ring-1 ring-gray-200 flex items-center justify-center p-2 mb-2">
+            <img
+              src={logo}
+              alt="DVM & Associates"
+              className="h-20 w-20 object-contain"
+              style={{ objectFit: 'contain' }}
+            />
+          </div>
+          <h2 className="mt-1 text-2xl font-semibold text-gray-900" style={{ fontFamily: 'Poppins, Inter, sans-serif' }}>Welcome back</h2>
           <p className="text-gray-500 text-sm">Sign in to your dashboard</p>
         </div>
 
@@ -195,7 +180,7 @@ const Login = ({ onLogin }) => {
               maxLength={10}
               inputMode="numeric"
               pattern="[0-9]{10}"
-              onKeyDown={(e) => { if(['e','E','+','-','.',' '].includes(e.key)) e.preventDefault() }}
+              onKeyDown={(e) => { if (['e', 'E', '+', '-', '.', ' '].includes(e.key)) e.preventDefault() }}
               required
             />
           </div>
@@ -234,7 +219,7 @@ const Login = ({ onLogin }) => {
           {isLoading ? 'Processing...' : 'Sign In'}
         </button>
 
-        
+
 
       </form>
       <div

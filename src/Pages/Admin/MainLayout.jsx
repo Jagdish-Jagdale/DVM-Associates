@@ -10,6 +10,7 @@ import { RiLogoutBoxRLine } from 'react-icons/ri'
 import logo from '../../assets/D_V_Mane_Associates_removebg.png'
 import { signOut } from 'firebase/auth'
 import { auth } from '../../../firebase.js'
+import ServerClock from '../../Components/UI/ServerClock.jsx'
 
 const ReportStatus = () => (
   <div className="text-gray-700">Report status screen coming soon.</div>
@@ -90,13 +91,13 @@ const MainLayout = ({ onLogout }) => {
                 type="button"
                 className="flex items-center gap-2 border-2 border-gray-200 rounded-full bg-gray-50 text-gray-700 cursor-pointer text-base font-semibold tracking-wide transition-all hover:bg-red-500 hover:text-white hover:border-red-600 hover:-translate-y-0.5 hover:shadow-sm w-10 h-10 justify-center p-0 md:w-auto md:h-auto md:px-5 md:py-2"
                 onClick={async () => {
-                  try { await signOut(auth) } catch {}
+                  try { await signOut(auth) } catch { }
                   try {
                     localStorage.removeItem('authRole')
                     sessionStorage.removeItem('authRole')
                     localStorage.clear()
                     sessionStorage.clear()
-                  } catch {}
+                  } catch { }
                   if (typeof onLogout === 'function') onLogout()
                   setSidebarOpen(false)
                   navigate('/login')
@@ -105,6 +106,7 @@ const MainLayout = ({ onLogout }) => {
                 <RiLogoutBoxRLine size={24} />
                 <span className="hidden md:inline">Logout</span>
               </button>
+              <ServerClock />
             </div>
           </div>
         </div>
@@ -148,13 +150,13 @@ const MainLayout = ({ onLogout }) => {
                 type="button"
                 className="flex items-center gap-2 border-2 border-gray-200 rounded-full bg-gray-50 text-gray-700 cursor-pointer text-base font-semibold tracking-wide transition-all hover:bg-red-500 hover:text-white hover:border-red-600 hover:-translate-y-0.5 hover:shadow-sm w-10 h-10 justify-center p-0 md:w-auto md:h-auto md:px-5 md:py-2"
                 onClick={async () => {
-                  try { await signOut(auth) } catch {}
+                  try { await signOut(auth) } catch { }
                   try {
                     localStorage.removeItem('authRole')
                     sessionStorage.removeItem('authRole')
                     localStorage.clear()
                     sessionStorage.clear()
-                  } catch {}
+                  } catch { }
                   if (typeof onLogout === 'function') onLogout()
                   navigate('/login')
                 }}
@@ -162,6 +164,7 @@ const MainLayout = ({ onLogout }) => {
                 <RiLogoutBoxRLine size={24} />
                 <span className="hidden md:inline">Logout</span>
               </button>
+              <ServerClock />
             </div>
           </div>
         </div>
