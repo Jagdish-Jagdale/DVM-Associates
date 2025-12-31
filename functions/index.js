@@ -96,7 +96,7 @@ exports.deleteUserAccount = onCall(async (request) => {
 });
 
 exports.autoReservedRow = onSchedule({
-    schedule: "00 00 * * *",
+    schedule: "0 0 * * *",
     timeZone: "Asia/Kolkata",
 }, async (event) => {
     const db = admin.database();
