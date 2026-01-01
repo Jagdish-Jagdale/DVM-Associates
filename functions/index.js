@@ -145,20 +145,14 @@ exports.autoReservedRow = onSchedule({
                 const snapshot = await excelRef.once("value");
                 let maxRef = 0;
 
+                // Scan logic (Global Scan for Continuity)
                 snapshot.forEach(child => {
                     const val = child.val();
-                    let yp = null;
-                    const k = child.key;
-                    if (k.includes(`-${yearPair}-`) || k.includes(`-${yearPair}_`) || k.includes(`_${yearPair}-`)) {
-                        yp = yearPair;
-                    }
-                    else if (val.OfficeNo && String(val.OfficeNo).includes(`/${yearPair}`)) {
-                        yp = yearPair;
-                    }
-
-                    if (yp === yearPair && val.RefNo) {
+                    if (val && val.RefNo) {
                         const n = parseInt(val.RefNo, 10);
-                        if (!isNaN(n) && n > maxRef) maxRef = n;
+                        if (!isNaN(n) && n > maxRef) {
+                            maxRef = n;
+                        }
                     }
                 });
 
@@ -305,25 +299,14 @@ exports.createExcelRecord = onCall(async (request) => {
                 const snapshot = await excelRef.once("value");
                 let maxRef = 0;
 
-                // Scan logic (Robust)
+                // Scan logic (Global Scan for Continuity)
                 snapshot.forEach(child => {
                     const val = child.val();
-                    let yp = null;
-
-                    // Helper: check if record belongs to this YearPair
-                    // Check Key
-                    const k = child.key;
-                    if (k.includes(`-${yearPair}-`) || k.includes(`-${yearPair}_`) || k.includes(`_${yearPair}-`)) {
-                        yp = yearPair;
-                    }
-                    // Check OfficeNo
-                    else if (val.OfficeNo && String(val.OfficeNo).includes(`/${yearPair}`)) {
-                        yp = yearPair;
-                    }
-
-                    if (yp === yearPair && val.RefNo) {
+                    if (val && val.RefNo) {
                         const n = parseInt(val.RefNo, 10);
-                        if (!isNaN(n) && n > maxRef) maxRef = n;
+                        if (!isNaN(n) && n > maxRef) {
+                            maxRef = n;
+                        }
                     }
                 });
 
