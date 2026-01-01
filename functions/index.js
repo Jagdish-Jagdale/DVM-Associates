@@ -251,7 +251,6 @@ exports.createExcelRecord = onCall(async (request) => {
             "Kolhapur": "KOP",
             "Mumbai": "MUM",
             "Pune": "PUNE",
-            "PCMC": "PUNE",
             "Sangli": "SNGL",
             "Satara": "STR",
             "Vijayapur": "VJP",

@@ -31,7 +31,7 @@ const defaultLocations = [
   { name: "Sangli", shortForm: "SNGL", aliases: ["SNGL"] },
   { name: "Belgaum", shortForm: "BGM", aliases: ["BGM"] },
   { name: "Kolhapur", shortForm: "KOP", aliases: ["KOP"] },
-  { name: "Pune", shortForm: "PUNE", aliases: ["PUNE", "PCMC"] },
+  { name: "Pune", shortForm: "PUNE", aliases: ["PUNE"] },
   { name: "Bengaluru", shortForm: "BLR", aliases: ["BLR"] },
   { name: "Mumbai", shortForm: "MUM", aliases: ["MUM"] },
   { name: "Hyderabad", shortForm: "HYD", aliases: ["HYD"] },
@@ -140,7 +140,7 @@ const minw = (h) => {
 const normalizeLocation = (name) => {
   if (!name) return "";
   const s = String(name).toLowerCase().trim();
-  return s === "pcmc" ? "pune" : s;
+  return s;
 };
 
 const monthOptions = [
@@ -793,11 +793,10 @@ const Excel = () => {
       setReservedRow(null);
       return;
     }
-    const loc = selectedLocation === "PCMC" ? "Pune" : selectedLocation;
-
+    const loc = selectedLocation;
     // Check if reserved row already exists in excel_records for this date and location
     const existingReserved = records.find((r) => {
-      const actualLoc = r.Location === "PCMC" ? "Pune" : r.Location;
+      const actualLoc = r.Location;
       const locMatch = actualLoc === loc || r.Branch === loc;
       if (!locMatch) return false;
 
@@ -1288,7 +1287,7 @@ const Excel = () => {
         alert("Select a location first.");
         return;
       }
-      const actual = loc === "PCMC" ? "Pune" : loc;
+      const actual = loc;
       const OfficeNo = `DVM/${shortOf(actual)}/${yearPair}`;
       setRecords((prev) => {
         const sr =
@@ -1355,6 +1354,21 @@ const Excel = () => {
       const complete = recs.filter(isRecordComplete);
       if (!complete.length) return;
 
+      // START VALIDATION: Check for 10-digit contact numbers
+      for (const r of complete) {
+        if (r.ClientContactNo) {
+          const digits = r.ClientContactNo.replace(/\D/g, "");
+          if (digits.length !== 10) {
+            setErrorSnack({
+              open: true,
+              message: `ClientContactNo must be exactly 10 digits. Row Sr: ${r.Sr}`,
+            });
+            return false;
+          }
+        }
+      }
+      // END VALIDATION
+
       // Split into New (no RefNo) vs Existing (has RefNo)
       const newRecords = complete.filter(r => !r.RefNo);
       const existingRecords = complete.filter(r => r.RefNo);
@@ -1363,7 +1377,7 @@ const Excel = () => {
       if (newRecords.length > 0) {
         if (!auth.currentUser) {
           alert("You must be logged in to save new records. Please refresh the page or log in again.");
-          return;
+          return false;
         }
         const createExcelRecord = httpsCallable(functions, 'createExcelRecord');
 
@@ -1438,6 +1452,7 @@ const Excel = () => {
           })
         );
       }
+      return true;
     },
     [yearPairForRecord, records, isRecordComplete, serverDate]
   );
@@ -1477,7 +1492,8 @@ const Excel = () => {
       setIsSaving(true);
 
       try {
-        await saveRecords(complete);
+        const success = await saveRecords(complete);
+        if (success === false) return;
 
         // Clear editing state for saved rows
         setEditingRows((prev) => {

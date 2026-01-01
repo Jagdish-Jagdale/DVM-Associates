@@ -31,7 +31,7 @@ const defaultLocations = [
   { name: "Sangli", shortForm: "SNGL", aliases: ["SNGL"] },
   { name: "Belgaum", shortForm: "BGM", aliases: ["BGM"] },
   { name: "Kolhapur", shortForm: "KOP", aliases: ["KOP"] },
-  { name: "Pune", shortForm: "PUNE", aliases: ["PUNE", "PCMC"] },
+  { name: "Pune", shortForm: "PUNE", aliases: ["PUNE"] },
   { name: "Bengaluru", shortForm: "BLR", aliases: ["BLR"] },
   { name: "Mumbai", shortForm: "MUM", aliases: ["MUM"] },
   { name: "Hyderabad", shortForm: "HYD", aliases: ["HYD"] },
@@ -140,7 +140,7 @@ const minw = (h) => {
 const normalizeLocation = (name) => {
   if (!name) return "";
   const s = String(name).toLowerCase().trim();
-  return s === "pcmc" ? "pune" : s;
+  return s;
 };
 
 const monthOptions = [
@@ -1297,7 +1297,7 @@ const Excel = () => {
         if (!rec.Month) rec.Month = serverMonth;
 
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
-          const locName = rec.Location === "PCMC" ? "Pune" : rec.Location;
+          const locName = rec.Location;
           const yp = yearPairForRecord(rec);
           rec.OfficeNo = `DVM/${shortOf(locName)}/${yp}`;
         }
@@ -1367,7 +1367,7 @@ const Excel = () => {
         rec = recomputeTotals(rec);
         if (!rec.Month) rec.Month = serverMonth;
         if (["Location", "VisitDate", "ReportDate"].includes(field)) {
-          const locName = rec.Location === "PCMC" ? "Pune" : rec.Location;
+          const locName = rec.Location;
           const yp = yearPairFromDate(dateFilter) || yearPair;
           rec.OfficeNo = `DVM/${shortOf(locName)}/${yp}`;
         }
@@ -1384,7 +1384,7 @@ const Excel = () => {
         alert("Select a location first.");
         return;
       }
-      const actual = loc === "PCMC" ? "Pune" : loc;
+      const actual = loc;
       const OfficeNo = `DVM/${shortOf(actual)}/${yearPair}`;
       setRecords((prev) => {
         const sr =
@@ -1451,6 +1451,21 @@ const Excel = () => {
       const complete = recs.filter(isRecordComplete);
       if (!complete.length) return;
 
+      // START VALIDATION: Check for 10-digit contact numbers
+      for (const r of complete) {
+        if (r.ClientContactNo) {
+          const digits = r.ClientContactNo.replace(/\D/g, "");
+          if (digits.length !== 10) {
+            setErrorSnack({
+              open: true,
+              message: `ClientContactNo must be exactly 10 digits.`,
+            });
+            return false;
+          }
+        }
+      }
+      // END VALIDATION
+
       const newRecords = complete.filter(r => !r.RefNo);
       const existingRecords = complete.filter(r => r.RefNo);
 
@@ -1458,29 +1473,30 @@ const Excel = () => {
       if (newRecords.length > 0) {
         if (!auth.currentUser) {
           alert("You must be logged in to save new records. Please refresh the page or log in again.");
-          return;
+          return false;
         }
         const createExcelRecord = httpsCallable(functions, 'createExcelRecord');
 
         await Promise.all(newRecords.map(async (r) => {
           try {
-            // Prepare payload
+            // Prepare payload - strip internal fields
             const payload = { ...r };
             delete payload.__dirty;
             delete payload.__local;
             delete payload.globalIndex;
-            delete payload.RefNo;
+            delete payload.RefNo; // Ensure we don't send empty string if present
 
             // Ensure defaults
             payload.Amount = payload.Amount || "";
             payload.GST = payload.GST || 0;
-            payload.Total = payload.Total || "";
+            payload.Total = payload.Total || ""; // Let server calc or use this
             payload.FMV = payload.FMV || "";
 
             const response = await createExcelRecord(payload);
-            const result = response.data;
+            const result = response.data; // { success, refNo, key, officeNo }
 
             if (result && result.success) {
+              // Update local state with returned values
               setRecords(prev => {
                 const next = [...prev];
                 const idx = next.findIndex(item => item.globalIndex === r.globalIndex);
@@ -1498,6 +1514,7 @@ const Excel = () => {
             }
           } catch (err) {
             console.error("Failed to create record via function:", err);
+            // Should we throw so outer catch block handles it?
             throw err;
           }
         }));
@@ -1507,18 +1524,19 @@ const Excel = () => {
       if (existingRecords.length > 0) {
         await Promise.all(
           existingRecords.map(async (r) => {
-            const key = toKey(r);
+            const key = toKey(r); // Helper that constructs key from record
             await set(ref(db, `excel_records/${key}`), {
               ...r,
               adminBranch: (defaultLocations.find(l => l.name === r.Location)?.name || r.Location),
               VisitStatus: !!r.VisitStatus,
               SoftCopy: !!r.SoftCopy,
               Print: !!r.Print,
-              __dirty: null,
+              __dirty: null, // Don't save these to DB
               __local: null,
               globalIndex: null
             });
 
+            // Update local state to clean dirty flag
             setRecords(prev => {
               const next = [...prev];
               const idx = next.findIndex(item => item.globalIndex === r.globalIndex);
@@ -1530,12 +1548,14 @@ const Excel = () => {
           })
         );
       }
+      return true;
     },
     [yearPairForRecord, records, isRecordComplete, serverDate]
   );
 
   const doSave = useCallback(
     async (recList) => {
+      // update validation highlights for provided records
       const updates = {};
       recList.forEach((r) => {
         const miss = getMissingFields(r);
@@ -1543,6 +1563,7 @@ const Excel = () => {
       });
       setValidationMap((prev) => {
         const next = { ...prev };
+        // apply updates for the targeted records only
         recList.forEach((r) => {
           if (updates[r.globalIndex]?.length)
             next[r.globalIndex] = updates[r.globalIndex];
@@ -1551,9 +1572,11 @@ const Excel = () => {
         return next;
       });
 
+      // Filter only complete records for saving
       const complete = recList.filter(isRecordComplete);
       const count = complete.length;
 
+      // If no complete records, show error
       if (count === 0) {
         setErrorSnack({
           open: true,
@@ -1565,7 +1588,15 @@ const Excel = () => {
       setIsSaving(true);
 
       try {
-        await saveRecords(complete);
+        const success = await saveRecords(complete);
+        if (success === false) return; // Stop if validation failed
+
+        // Clear editing state for saved rows
+        setEditingRows((prev) => {
+          const next = new Set(prev);
+          complete.forEach((rec) => next.delete(rec.globalIndex));
+          return next;
+        });
 
         setSuccessSnack({
           open: true,
