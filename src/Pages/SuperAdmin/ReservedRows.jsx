@@ -743,6 +743,8 @@ const ReservedRows = () => {
         VisitDate: addDate, // Defaulting VisitDate to selected date
         Month: mon,
         // Other fields empty by default
+        ReportStatus: "",
+        BillStatus: "",
       };
 
       await set(newRef, newRow);

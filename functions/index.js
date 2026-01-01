@@ -192,8 +192,8 @@ exports.autoReservedRow = onSchedule({
             Remark: "",
 
             VisitStatus: "Pending",
-            ReportStatus: "Pending",
-            BillStatus: "Pending"
+            ReportStatus: "",
+            BillStatus: ""
         });
 
         console.log(`Auto-created Reserved Row with key ${key}: ${officeNo} Ref: ${nextRef}`);
