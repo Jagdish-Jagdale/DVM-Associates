@@ -832,7 +832,7 @@ const Excel = () => {
       );
     } else {
       // No reserved row exists from SuperAdmin, create a synthetic one for display
-      const actual = loc === "PCMC" ? "Pune" : loc;
+      const actual = loc;
       const officeNo = `DVM/${shortOf(actual)}/${yearPair}`;
       setReservedRow(
         recomputeTotals({
@@ -983,7 +983,8 @@ const Excel = () => {
         const data = snap.val() || {};
         const out = [];
         Object.keys(data).forEach((k) => {
-          const m = k.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})-(\d+)$/);
+          // Try reserved format or generic with underscore
+          const m = k.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})[_-](\d{3,})$/);
           if (!m) return;
           const sf = m[1];
           const refNo = m[3];
@@ -1076,7 +1077,7 @@ const Excel = () => {
   const generateRefNo = useCallback(async () => {
     const snap = await get(ref(db, "excel_records"));
     const keys = Object.keys(snap.val() || {});
-    const re = new RegExp(`-${yearPair}-(\\d{3})$`);
+    const re = new RegExp(`-${yearPair}-(\\d{3,})$`);
     const nums = keys
       .map((k) => {
         const m = k.match(re);

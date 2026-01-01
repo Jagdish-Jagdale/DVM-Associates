@@ -1052,7 +1052,7 @@ const Excel = () => {
             refNo = m[3];
           } else {
             // Try reserved format or generic with underscore
-            m = k.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})[_-](\d{3})$/);
+            m = k.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})[_-](\d{3,})$/);
             if (m) {
               sf = m[1];
               refNo = m[3];
@@ -1154,7 +1154,7 @@ const Excel = () => {
   const generateRefNo = useCallback(async () => {
     const snap = await get(ref(db, "excel_records"));
     const keys = Object.keys(snap.val() || {});
-    const re = new RegExp(`-${yearPair}-(\\d{3})$`);
+    const re = new RegExp(`-${yearPair}-(\\d{3,})$`);
     const nums = keys
       .map((k) => {
         const m = k.match(re);
