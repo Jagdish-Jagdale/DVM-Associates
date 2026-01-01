@@ -1154,9 +1154,9 @@ const Excel = () => {
       })
       .filter((n) => n != null)
       .sort((a, b) => a - b);
-    let n = 1;
-    while (nums.includes(n) && n <= 999) n++;
-    return n.toString().padStart(3, "0");
+    const maxVal = nums.length > 0 ? Math.max(...nums) : 0;
+    const nextVal = Math.max(maxVal, 6500) + 1;
+    return nextVal.toString().padStart(3, "0");
   }, [yearPair]);
   const getNextRefNoForYP = useCallback(
     async (yp) => {
@@ -1229,7 +1229,7 @@ const Excel = () => {
         }
       }
 
-      const nextRefNo = (maxN + 1).toString().padStart(3, "0");
+      const nextRefNo = (Math.max(maxN, 6500) + 1).toString().padStart(3, "0");
       console.log("=== Final result: maxN =", maxN, ", returning:", nextRefNo);
       return nextRefNo;
     },
@@ -1447,14 +1447,32 @@ const Excel = () => {
       const snap = await get(ref(db, "excel_records"));
       const keys = Object.keys(snap.val() || {});
       const maxByYP = new Map();
-      keys.forEach((k) => {
-        // Match any key ending with -YY-YY-NNN format
-        const m = k.match(/-(\d{2}-\d{2})-(\d+)$/);
-        if (m) {
-          const yp = m[1];
-          const n = parseInt(m[2], 10);
+      const data = snap.val() || {};
+      Object.entries(data).forEach(([k, v]) => {
+        let yp = null;
+        let refNo = null;
+
+        // Try to extract from OfficeNo (most reliable)
+        if (v?.OfficeNo) {
+          const m = String(v.OfficeNo).match(/\/(\d{2}-\d{2})/);
+          if (m) yp = m[1];
+        }
+
+        // Fallback: extract from Key
+        if (!yp) {
+          const m = k.match(/-(\d{2}-\d{2})[-_]/);
+          if (m) yp = m[1];
+        }
+
+        if (v?.RefNo) refNo = parseInt(v.RefNo, 10);
+        else {
+          const m = k.match(/[-_](\d{3,})$/);
+          if (m) refNo = parseInt(m[1], 10);
+        }
+
+        if (yp && refNo && !isNaN(refNo)) {
           const current = maxByYP.get(yp) || 0;
-          if (n > current) maxByYP.set(yp, n);
+          if (refNo > current) maxByYP.set(yp, refNo);
         }
       });
       records.forEach((r) => {

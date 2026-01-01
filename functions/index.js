@@ -99,6 +99,14 @@ exports.autoReservedRow = onSchedule({
     schedule: "0 0 * * *",
     timeZone: "Asia/Kolkata",
 }, async (event) => {
+    // Check if today is Sunday in IST (0 = Sunday)
+    const now = new Date();
+    const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    if (istDate.getDay() === 0) {
+        console.log("Skipping autoReservedRow because it is Sunday (IST).");
+        return;
+    }
+
     const db = admin.database();
     const ref = db.ref("excel_records");
 

@@ -458,12 +458,29 @@ const Pending = () => {
         const out = [];
         Object.keys(data).forEach((key) => {
           const rec = data[key] || {};
-          const m = key.match(/^DVM-([A-Z]{3,5})-(\d{2}-\d{2})-(\d{3})$/);
-          if (!m) return;
+          // Match standard or flexible key format (allow >3 digits)
+          let m = key.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})[-_](\d+)$/);
+
           const loc =
             (rec.Location === "PCMC" ? "Pune" : rec.Location) || "Unknown";
-          const officeNo = rec.OfficeNo || (m ? `DVM/${m[1]}/${m[2]}` : "");
-          const refNo = rec.RefNo || (m ? m[3] : key);
+
+          let yp = m ? m[2] : "";
+          let refPart = m ? m[3] : "";
+
+          // Fallback parsing if strict regex failed
+          if (!m) {
+            // Try extracting from OfficeNo
+            if (rec.OfficeNo) {
+              const om = String(rec.OfficeNo).match(/\/(\d{2}-\d{2})/);
+              if (om) yp = om[1];
+            }
+            // Try extracting from Key end
+            const km = key.match(/[-_](\d{3,})$/);
+            if (km) refPart = km[1];
+          }
+
+          const officeNo = rec.OfficeNo || (yp ? `DVM/${shortOf(loc)}/${yp}` : "");
+          const refNo = rec.RefNo || refPart || key;
           const base = {
             Sr: rec.Sr?.toString() || "",
             Month: rec.Month || "",

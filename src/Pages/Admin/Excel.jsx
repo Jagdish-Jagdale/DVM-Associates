@@ -1087,35 +1087,79 @@ const Excel = () => {
       })
       .filter((n) => n != null)
       .sort((a, b) => a - b);
-    let n = 1;
-    while (nums.includes(n) && n <= 999) n++;
-    return n.toString().padStart(3, "0");
+    const maxVal = nums.length > 0 ? Math.max(...nums) : 0;
+    const nextVal = Math.max(maxVal, 6500) + 1;
+    return nextVal.toString().padStart(3, "0");
   }, [yearPair]);
+
   const getNextRefNoForYP = useCallback(
     async (yp) => {
+      console.log("=== getNextRefNoForYP called with yp:", yp);
       const snap = await get(ref(db, "excel_records"));
-      const keys = Object.keys(snap.val() || {});
-      const used = new Set();
-      const re = new RegExp(`-(${yp})-(\\d{3})$`);
-      keys.forEach((k) => {
-        const m = k.match(re);
-        if (m) {
-          used.add(parseInt(m[2], 10));
+      const data = snap.val() || {};
+      console.log("Database records count:", Object.keys(data).length);
+      let maxN = 0;
+
+      // Extract year parts for flexible matching
+      const [y1, y2] = yp.split("-");
+      const fullYear = `${2000 + parseInt(y1)}-${y2}`;
+      console.log("Searching for year patterns:", yp, "or", fullYear);
+
+      Object.entries(data).forEach(([k, v]) => {
+        // Check if this record belongs to the current year pair
+        let belongs = false;
+
+        // Check OfficeNo field (most reliable)
+        if (v?.OfficeNo) {
+          const office = String(v.OfficeNo);
+          if (office.includes(`/${yp}`) || office.includes(`/${fullYear}`)) {
+            belongs = true;
+          }
+        }
+
+        // Check key itself as fallback
+        if (!belongs) {
+          if (k.includes(`-${yp}-`) || k.includes(`-${yp}_`) ||
+            k.includes(`_${yp}-`) || k.includes(`_${yp}_`) ||
+            k.includes(`-${fullYear}-`) || k.includes(`-${fullYear}_`) ||
+            k.includes(`_${fullYear}-`) || k.includes(`_${fullYear}_`)) {
+            belongs = true;
+          }
+        }
+
+        if (belongs && v?.RefNo) {
+          const n = parseInt(v.RefNo, 10);
+          if (!isNaN(n) && n > maxN) {
+            maxN = n;
+          }
         }
       });
-      // include numbers already in local state for same year pair
+
+      // Also check local records in state
       records.forEach((r) => {
         const y = yearPairForRecord(r);
-        if (y === yp) {
+        if (y === yp && r.RefNo) {
           const n = parseInt(r.RefNo, 10);
-          if (!isNaN(n)) used.add(n);
+          if (!isNaN(n) && n > maxN) {
+            maxN = n;
+          }
         }
       });
-      let n = 1;
-      while (used.has(n)) n++;
-      return n.toString().padStart(3, "0");
+
+      // Check reserved row in state
+      const reservedYP = dateFilter ? yearPairFromDate(dateFilter) : "";
+      if (reservedRow?.committedRefNo && reservedYP === yp) {
+        const n = parseInt(reservedRow.committedRefNo, 10);
+        if (!isNaN(n) && n > maxN) {
+          maxN = n;
+        }
+      }
+
+      const nextRefNo = (Math.max(maxN, 6500) + 1).toString().padStart(3, "0");
+      console.log("=== Final result: maxN =", maxN, ", returning:", nextRefNo);
+      return nextRefNo;
     },
-    [records, yearPairForRecord]
+    [records, yearPairForRecord, reservedRow, dateFilter]
   );
 
   const assignRefNoImmediate = useCallback(
@@ -1317,24 +1361,36 @@ const Excel = () => {
       const keys = Object.keys(snap.val() || {});
       const maxRefNoByYP = new Map();
 
-      // Check existing keys in DB
-      keys.forEach((k) => {
-        // Match standard format OR reserved format if it contains RefNo
-        // Try DVM-XXX-YY-YY-NNN
-        const m = k.match(/^DVM-([A-Z]+)-(\d{2}-\d{2})-(\d+)$/);
-        if (!m) {
-          // Try DVM-RESERVED-YY-YY-NNN or other variations if they exist
-          // The reserved key logic in SuperAdmin uses DVM-LOC-YY-YY-NNN, so it should be covered by above.
-          // Just to be safe, we rely on the value if needed, but keys are faster.
-          // Let's assume the key format is reliable designated in saveReservedRow:
-          // `DVM-${shortOf(locName)}-${yp}-${committed}`
-          // So the regex above is correct.
-          return;
+      // Robustly check existing RefNos in DB
+      const data = snap.val() || {};
+      Object.entries(data).forEach(([k, v]) => {
+        let yp = null;
+        let refNo = null;
+
+        // Try to extract from OfficeNo (most reliable)
+        if (v?.OfficeNo) {
+          const m = String(v.OfficeNo).match(/\/(\d{2}-\d{2})/);
+          if (m) yp = m[1];
         }
-        const yp = m[1];
-        const n = parseInt(m[2], 10);
-        const currentMax = maxRefNoByYP.get(yp) || 0;
-        if (n > currentMax) maxRefNoByYP.set(yp, n);
+
+        // Fallback: extract from Key
+        if (!yp) {
+          // Try standard key pattern DVM-LOC-YP-REF
+          const m = k.match(/-(\d{2}-\d{2})[-_]/);
+          if (m) yp = m[1];
+        }
+
+        if (v?.RefNo) refNo = parseInt(v.RefNo, 10);
+        else {
+          // Try match at end of key
+          const m = k.match(/[-_](\d{3,})$/);
+          if (m) refNo = parseInt(m[1], 10);
+        }
+
+        if (yp && refNo && !isNaN(refNo)) {
+          const current = maxRefNoByYP.get(yp) || 0;
+          if (refNo > current) maxRefNoByYP.set(yp, refNo);
+        }
       });
 
       // include numbers already present in local state
