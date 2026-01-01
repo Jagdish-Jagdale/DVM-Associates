@@ -9,7 +9,8 @@ import React, {
 import { ThreeDots } from "react-loader-spinner";
 
 import { ref, set, onValue, get } from "firebase/database";
-import { db } from "../../../firebase.js";
+import { db, functions, auth } from "../../../firebase.js";
+import { httpsCallable } from "firebase/functions";
 import * as XLSX from "xlsx";
 import {
   FiSave,
@@ -28,14 +29,14 @@ import DatePicker from "../../Components/UI/DatePicker.jsx";
 
 const defaultLocations = [
   { name: "Sangli", shortForm: "SNGL", aliases: ["SNGL"] },
-  { name: "Belgaum", shortForm: "BGM", aliases: ["BLG", "BGM"] },
-  { name: "Kolhapur", shortForm: "KOP", aliases: ["KLP", "KOP"] },
+  { name: "Belgaum", shortForm: "BGM", aliases: ["BGM"] },
+  { name: "Kolhapur", shortForm: "KOP", aliases: ["KOP"] },
   { name: "Pune", shortForm: "PUNE", aliases: ["PUNE", "PCMC"] },
-  { name: "Bengaluru", shortForm: "BLR", aliases: ["BNG", "BLR"] },
+  { name: "Bengaluru", shortForm: "BLR", aliases: ["BLR"] },
   { name: "Mumbai", shortForm: "MUM", aliases: ["MUM"] },
   { name: "Hyderabad", shortForm: "HYD", aliases: ["HYD"] },
-  { name: "Indore", shortForm: "INDR", aliases: ["IND", "INDR"] },
-  { name: "Satara", shortForm: "STR", aliases: ["SAT", "STR"] },
+  { name: "Indore", shortForm: "INDR", aliases: ["INDR"] },
+  { name: "Satara", shortForm: "STR", aliases: ["STR"] },
   { name: "Vijayapur", shortForm: "VJP", aliases: ["VJP"] },
 ];
 
@@ -749,10 +750,7 @@ const Excel = () => {
       return () => clearTimeout(t);
     }
   }, [deleteSnack.open]);
-  const canSaveAll = useMemo(
-    () => !isSaving && !isLoading && records.some((r) => r.__dirty),
-    [isSaving, isLoading, records]
-  );
+
   const [reservedRow, setReservedRow] = useState(null);
 
   const authBranch = useMemo(() => {
@@ -1357,137 +1355,89 @@ const Excel = () => {
       const complete = recs.filter(isRecordComplete);
       if (!complete.length) return;
 
-      const snap = await get(ref(db, "excel_records"));
-      const keys = Object.keys(snap.val() || {});
-      const maxRefNoByYP = new Map();
+      // Split into New (no RefNo) vs Existing (has RefNo)
+      const newRecords = complete.filter(r => !r.RefNo);
+      const existingRecords = complete.filter(r => r.RefNo);
 
-      // Robustly check existing RefNos in DB
-      const data = snap.val() || {};
-      Object.entries(data).forEach(([k, v]) => {
-        let yp = null;
-        let refNo = null;
-
-        // Try to extract from OfficeNo (most reliable)
-        if (v?.OfficeNo) {
-          const m = String(v.OfficeNo).match(/\/(\d{2}-\d{2})/);
-          if (m) yp = m[1];
+      // 1. Handle New Records via Cloud Function
+      if (newRecords.length > 0) {
+        if (!auth.currentUser) {
+          alert("You must be logged in to save new records. Please refresh the page or log in again.");
+          return;
         }
+        const createExcelRecord = httpsCallable(functions, 'createExcelRecord');
 
-        // Fallback: extract from Key
-        if (!yp) {
-          // Try standard key pattern DVM-LOC-YP-REF
-          const m = k.match(/-(\d{2}-\d{2})[-_]/);
-          if (m) yp = m[1];
-        }
+        await Promise.all(newRecords.map(async (r) => {
+          try {
+            // Prepare payload - strip internal fields
+            const payload = { ...r };
+            delete payload.__dirty;
+            delete payload.__local;
+            delete payload.globalIndex;
+            delete payload.RefNo; // Ensure we don't send empty string if present
 
-        if (v?.RefNo) refNo = parseInt(v.RefNo, 10);
-        else {
-          // Try match at end of key
-          const m = k.match(/[-_](\d{3,})$/);
-          if (m) refNo = parseInt(m[1], 10);
-        }
+            // Ensure defaults
+            payload.Amount = payload.Amount || "";
+            payload.GST = payload.GST || 0;
+            payload.Total = payload.Total || "";
+            payload.FMV = payload.FMV || "";
 
-        if (yp && refNo && !isNaN(refNo)) {
-          const current = maxRefNoByYP.get(yp) || 0;
-          if (refNo > current) maxRefNoByYP.set(yp, refNo);
-        }
-      });
+            const response = await createExcelRecord(payload);
+            const result = response.data; // { success, refNo, key, officeNo }
 
-      // include numbers already present in local state
-      records.forEach((r) => {
-        const yp = yearPairForRecord(r);
-        const n = parseInt(r.RefNo, 10);
-        if (!isNaN(n)) {
-          const currentMax = maxRefNoByYP.get(yp) || 0;
-          if (n > currentMax) maxRefNoByYP.set(yp, n);
-        }
-      });
-
-      // Include reservedRow if it exists and has a RefNo
-      if (reservedRow && reservedRow.committedRefNo) {
-        const yp = yearPairFromDate(dateFilter) || yearPair;
-        const n = parseInt(reservedRow.committedRefNo, 10);
-        if (!isNaN(n)) {
-          const currentMax = maxRefNoByYP.get(yp) || 0;
-          if (n > currentMax) maxRefNoByYP.set(yp, n);
-        }
+            if (result && result.success) {
+              // Update local state with returned values
+              setRecords(prev => {
+                const next = [...prev];
+                const idx = next.findIndex(item => item.globalIndex === r.globalIndex);
+                if (idx !== -1) {
+                  next[idx] = {
+                    ...next[idx],
+                    RefNo: result.refNo,
+                    OfficeNo: result.officeNo,
+                    // Key isn't stored in record object usually, but helpful if we need it
+                    __dirty: false,
+                    __local: false
+                  };
+                }
+                return next;
+              });
+            }
+          } catch (err) {
+            console.error("Failed to create record via function:", err);
+            // Should we throw so outer catch block handles it?
+            throw err;
+          }
+        }));
       }
 
-      const assignedInBatch = new Map();
-      const enriched = complete.map((r) => {
-        const yp = yearPairForRecord(r);
-        const loc = r.Location === "PCMC" ? "Pune" : r.Location;
-        let refNoStr = r.RefNo;
-        if (!refNoStr) {
-          const currentMax = maxRefNoByYP.get(yp) || 0;
-          const batchOffset = assignedInBatch.get(yp) || 0;
-          const nextVal = Math.max(currentMax, 6500) + batchOffset + 1;
+      // 2. Handle Existing Records via Direct DB Update
+      if (existingRecords.length > 0) {
+        await Promise.all(
+          existingRecords.map(async (r) => {
+            const key = toKey(r); // Helper that constructs key from record
+            await set(ref(db, `excel_records/${key}`), {
+              ...r,
+              VisitStatus: !!r.VisitStatus,
+              SoftCopy: !!r.SoftCopy,
+              Print: !!r.Print,
+              __dirty: null, // Don't save these to DB
+              __local: null,
+              globalIndex: null
+            });
 
-          refNoStr = nextVal.toString().padStart(3, "0");
-          assignedInBatch.set(yp, batchOffset + 1);
-        }
-        const officeNo = `DVM/${shortOf(loc)}/${yp}`;
-        const amt = Math.max(0, Number(r.Amount) || 0);
-        const gst = Number((amt * 0.18).toFixed(2));
-        const created =
-          r.__local || !r.createdAt ? serverDate.toISOString() : r.createdAt;
-        return {
-          ...r,
-          RefNo: refNoStr,
-          OfficeNo: officeNo,
-          Amount: amt,
-          FMV: Math.max(0, Number(r.FMV) || 0),
-          GST: gst,
-          Total: (amt + gst).toFixed(2),
-          Location: loc,
-          createdAt: created,
-        };
-      });
-
-      // reflect newly assigned RefNo in local state before saving
-      const savedIdx = new Set(complete.map((c) => c.globalIndex));
-      setRecords((prev) => {
-        const updated = prev.map((p) => {
-          if (savedIdx.has(p.globalIndex)) {
-            const enrichedRec = enriched.find(
-              (e) => e.globalIndex === p.globalIndex
-            );
-            if (enrichedRec) {
-              return {
-                ...enrichedRec,
-                __dirty: false,
-                __local: false,
-              };
-            }
-          }
-          return p;
-        });
-        // Sort by createdAt descending, then by RefNo descending
-        return updated
-          .sort((a, b) => {
-            if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
-            const ta = Date.parse(a.createdAt || "") || 0;
-            const tb = Date.parse(b.createdAt || "") || 0;
-            if (tb !== ta) return tb - ta;
-            return (
-              a.Location.localeCompare(b.Location) ||
-              parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
-            );
+            // Update local state to clean dirty flag
+            setRecords(prev => {
+              const next = [...prev];
+              const idx = next.findIndex(item => item.globalIndex === r.globalIndex);
+              if (idx !== -1) {
+                next[idx] = { ...next[idx], __dirty: false, __local: false };
+              }
+              return next;
+            });
           })
-          .map((r, i) => ({ ...r, globalIndex: i }));
-      });
-
-      await Promise.all(
-        enriched.map(async (r) => {
-          const key = toKey(r);
-          await set(ref(db, `excel_records/${key}`), {
-            ...r,
-            VisitStatus: !!r.VisitStatus,
-            SoftCopy: !!r.SoftCopy,
-            Print: !!r.Print,
-          });
-        })
-      );
+        );
+      }
     },
     [yearPairForRecord, records, isRecordComplete, serverDate]
   );
@@ -1566,18 +1516,7 @@ const Excel = () => {
     });
   }, []);
 
-  const handleSaveAll = useCallback(() => {
-    // Filter records that have changes
-    const dirtyRecords = records.filter((r) => r.__dirty);
-    if (dirtyRecords.length === 0) {
-      setErrorSnack({
-        open: true,
-        message: "No changes to save",
-      });
-      return;
-    }
-    setConfirmState({ open: true, scope: "all", rowIndex: null });
-  }, [records]);
+
 
   const handleSaveRow = useCallback(
     (gi) => {
@@ -1836,18 +1775,7 @@ const Excel = () => {
                   <FiPlus />
                   <span className="hidden sm:inline">Add Data</span>
                 </button>
-                <button
-                  type="button"
-                  title="Save All"
-                  onClick={handleSaveAll}
-                  disabled={!canSaveAll}
-                  className={`px-3 py-2 rounded-md text-sm ${!canSaveAll
-                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                    : "bg-amber-600 text-white hover:bg-amber-700"
-                    }`}
-                >
-                  Save All
-                </button>
+
                 <button
                   type="button"
                   title="Download"
@@ -2081,13 +2009,10 @@ const Excel = () => {
                   </h3>
                 </div>
                 <p className="text-gray-600 mb-4 whitespace-pre-line">
-                  {confirmState.scope === "all"
-                    ? `You are about to save all changes.
-Please ensure that all entered data is correct before continuing.`
-                    : confirmState.rowIndex === -1
-                      ? `You are about to save the reserved row.
+                  {confirmState.rowIndex === -1
+                    ? `You are about to save the reserved row.
 Please verify all fields before saving.`
-                      : `You are about to save changes to this row.
+                    : `You are about to save changes to this row.
 Please ensure the data is accurate before proceeding.`}
                 </p>
                 <div className="flex justify-end gap-2">
@@ -2105,14 +2030,11 @@ Please ensure the data is accurate before proceeding.`}
                   </button>
                   <button
                     onClick={() => {
-                      const recs =
-                        confirmState.scope === "all"
-                          ? records.filter((r) => r.__dirty)
-                          : [
-                            records.find(
-                              (r) => r.globalIndex === confirmState.rowIndex
-                            ),
-                          ].filter(Boolean);
+                      const recs = [
+                        records.find(
+                          (r) => r.globalIndex === confirmState.rowIndex
+                        ),
+                      ].filter(Boolean);
                       setConfirmState({
                         open: false,
                         scope: "",

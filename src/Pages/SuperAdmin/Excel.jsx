@@ -9,7 +9,8 @@ import React, {
 import { ThreeDots } from "react-loader-spinner";
 
 import { ref, set, onValue, get } from "firebase/database";
-import { db } from "../../../firebase.js";
+import { db, functions, auth } from "../../../firebase.js";
+import { httpsCallable } from "firebase/functions";
 import * as XLSX from "xlsx";
 import {
   FiSave,
@@ -28,14 +29,14 @@ import DatePicker from "../../Components/UI/DatePicker.jsx";
 
 const defaultLocations = [
   { name: "Sangli", shortForm: "SNGL", aliases: ["SNGL"] },
-  { name: "Belgaum", shortForm: "BGM", aliases: ["BLG", "BGM"] },
-  { name: "Kolhapur", shortForm: "KOP", aliases: ["KLP", "KOP"] },
+  { name: "Belgaum", shortForm: "BGM", aliases: ["BGM"] },
+  { name: "Kolhapur", shortForm: "KOP", aliases: ["KOP"] },
   { name: "Pune", shortForm: "PUNE", aliases: ["PUNE", "PCMC"] },
-  { name: "Bengaluru", shortForm: "BLR", aliases: ["BNG", "BLR"] },
+  { name: "Bengaluru", shortForm: "BLR", aliases: ["BLR"] },
   { name: "Mumbai", shortForm: "MUM", aliases: ["MUM"] },
   { name: "Hyderabad", shortForm: "HYD", aliases: ["HYD"] },
-  { name: "Indore", shortForm: "INDR", aliases: ["IND", "INDR"] },
-  { name: "Satara", shortForm: "STR", aliases: ["SAT", "STR"] },
+  { name: "Indore", shortForm: "INDR", aliases: ["INDR"] },
+  { name: "Satara", shortForm: "STR", aliases: ["STR"] },
   { name: "Vijayapur", shortForm: "VJP", aliases: ["VJP"] },
 ];
 
@@ -330,6 +331,7 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
+            readOnly={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm${isReservedRow ? ' bg-gray-100' : ''} ${err}`}
           />
         );
@@ -348,6 +350,7 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
+            readOnly={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}${err}`}
           />
         );
@@ -413,7 +416,7 @@ const TableRow = memo(
               onChangeField(record.globalIndex, field, digits);
               // }
             }}
-            // readOnly={isReservedRow}
+            readOnly={isReservedRow}
             // disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}${err}`}
           />
@@ -432,7 +435,7 @@ const TableRow = memo(
               onChangeField(record.globalIndex, field, input);
               // }
             }}
-            // readOnly={isReservedRow}
+            readOnly={isReservedRow}
             // disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}${err}`}
           />
@@ -456,6 +459,7 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
+            disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}`}
           >
             <option value="">
@@ -476,6 +480,7 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
+            disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}${err}`}
           >
             <option value="">
@@ -496,6 +501,7 @@ const TableRow = memo(
             onChange={(e) =>
               onChangeField(record.globalIndex, field, e.target.value)
             }
+            disabled={isReservedRow}
             className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}`}
           >
             <option value="">Select Received On</option>
@@ -585,6 +591,7 @@ const TableRow = memo(
           onChange={(e) =>
             onChangeField(record.globalIndex, field, e.target.value)
           }
+          readOnly={isReservedRow}
           className={`w-full p-2 border border-gray-300 rounded text-sm ${isReservedRow ? 'bg-gray-100' : 'bg-white'}${err}`}
         />
       );
@@ -1444,133 +1451,85 @@ const Excel = () => {
       const complete = recs.filter(isRecordComplete);
       if (!complete.length) return;
 
-      const snap = await get(ref(db, "excel_records"));
-      const keys = Object.keys(snap.val() || {});
-      const maxByYP = new Map();
-      const data = snap.val() || {};
-      Object.entries(data).forEach(([k, v]) => {
-        let yp = null;
-        let refNo = null;
+      const newRecords = complete.filter(r => !r.RefNo);
+      const existingRecords = complete.filter(r => r.RefNo);
 
-        // Try to extract from OfficeNo (most reliable)
-        if (v?.OfficeNo) {
-          const m = String(v.OfficeNo).match(/\/(\d{2}-\d{2})/);
-          if (m) yp = m[1];
+      // 1. Handle New Records via Cloud Function
+      if (newRecords.length > 0) {
+        if (!auth.currentUser) {
+          alert("You must be logged in to save new records. Please refresh the page or log in again.");
+          return;
         }
+        const createExcelRecord = httpsCallable(functions, 'createExcelRecord');
 
-        // Fallback: extract from Key
-        if (!yp) {
-          const m = k.match(/-(\d{2}-\d{2})[-_]/);
-          if (m) yp = m[1];
-        }
+        await Promise.all(newRecords.map(async (r) => {
+          try {
+            // Prepare payload
+            const payload = { ...r };
+            delete payload.__dirty;
+            delete payload.__local;
+            delete payload.globalIndex;
+            delete payload.RefNo;
 
-        if (v?.RefNo) refNo = parseInt(v.RefNo, 10);
-        else {
-          const m = k.match(/[-_](\d{3,})$/);
-          if (m) refNo = parseInt(m[1], 10);
-        }
+            // Ensure defaults
+            payload.Amount = payload.Amount || "";
+            payload.GST = payload.GST || 0;
+            payload.Total = payload.Total || "";
+            payload.FMV = payload.FMV || "";
 
-        if (yp && refNo && !isNaN(refNo)) {
-          const current = maxByYP.get(yp) || 0;
-          if (refNo > current) maxByYP.set(yp, refNo);
-        }
-      });
-      records.forEach((r) => {
-        const yp = yearPairForRecord(r);
-        const n = parseInt(r.RefNo, 10);
-        if (!isNaN(n)) {
-          const current = maxByYP.get(yp) || 0;
-          if (n > current) maxByYP.set(yp, n);
-        }
-      });
+            const response = await createExcelRecord(payload);
+            const result = response.data;
 
-      const reservedYP = dateFilter ? yearPairFromDate(dateFilter) : "";
-      if (reservedRow?.committedRefNo) {
-        const nn = parseInt(reservedRow.committedRefNo, 10);
-        if (!isNaN(nn)) {
-          const current = maxByYP.get(reservedYP) || 0;
-          if (nn > current) maxByYP.set(reservedYP, nn);
-        }
+            if (result && result.success) {
+              setRecords(prev => {
+                const next = [...prev];
+                const idx = next.findIndex(item => item.globalIndex === r.globalIndex);
+                if (idx !== -1) {
+                  next[idx] = {
+                    ...next[idx],
+                    RefNo: result.refNo,
+                    OfficeNo: result.officeNo,
+                    __dirty: false,
+                    __local: false
+                  };
+                }
+                return next;
+              });
+            }
+          } catch (err) {
+            console.error("Failed to create record via function:", err);
+            throw err;
+          }
+        }));
       }
 
-      const enriched = complete.map((r) => {
-        const yp = yearPairForRecord(r);
-        const loc = r.Location === "PCMC" ? "Pune" : r.Location;
-        let refNoStr = r.RefNo;
-        if (!refNoStr) {
-          // Use max + 1 logic
-          const currentMax = maxByYP.get(yp) || 0;
-          const nextVal = Math.max(currentMax, 6500) + 1;
-          refNoStr = nextVal.toString().padStart(3, "0");
-          maxByYP.set(yp, nextVal); // Update for next record in batch
-        }
-        const officeNo = `DVM/${shortOf(loc)}/${yp}`;
-        const amt = Math.max(0, Number(r.Amount) || 0);
-        const gst = Number((amt * 0.18).toFixed(2));
-        const created =
-          r.__local || !r.createdAt ? serverDate.toISOString() : r.createdAt;
-        return {
-          ...r,
-          RefNo: refNoStr,
-          OfficeNo: officeNo,
-          Amount: amt,
-          GST: gst,
-          Total: (amt + gst).toFixed(2),
-          Location: loc,
-          createdAt: created,
-          createdByRole:
-            r.__local && !r.createdByRole
-              ? "SuperAdmin"
-              : r.createdByRole || "",
-          FMV: Math.max(0, Number(r.FMV) || 0),
-        };
-      });
+      // 2. Handle Existing Records via Direct DB Update
+      if (existingRecords.length > 0) {
+        await Promise.all(
+          existingRecords.map(async (r) => {
+            const key = toKey(r);
+            await set(ref(db, `excel_records/${key}`), {
+              ...r,
+              adminBranch: (defaultLocations.find(l => l.name === r.Location)?.name || r.Location),
+              VisitStatus: !!r.VisitStatus,
+              SoftCopy: !!r.SoftCopy,
+              Print: !!r.Print,
+              __dirty: null,
+              __local: null,
+              globalIndex: null
+            });
 
-      // reflect newly assigned RefNo in local state before saving
-      const savedIdx = new Set(complete.map((c) => c.globalIndex));
-      setRecords((prev) => {
-        const updated = prev.map((p) => {
-          if (savedIdx.has(p.globalIndex)) {
-            const enrichedRec = enriched.find(
-              (e) => e.globalIndex === p.globalIndex
-            );
-            if (enrichedRec) {
-              return {
-                ...enrichedRec,
-                __dirty: false,
-                __local: false,
-              };
-            }
-          }
-          return p;
-        });
-        // Sort by createdAt descending, then by RefNo descending for same RefNo
-        return updated
-          .sort((a, b) => {
-            if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
-            const ta = Date.parse(a.createdAt || "") || 0;
-            const tb = Date.parse(b.createdAt || "") || 0;
-            if (tb !== ta) return tb - ta;
-            return (
-              a.Location.localeCompare(b.Location) ||
-              parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
-            );
+            setRecords(prev => {
+              const next = [...prev];
+              const idx = next.findIndex(item => item.globalIndex === r.globalIndex);
+              if (idx !== -1) {
+                next[idx] = { ...next[idx], __dirty: false, __local: false };
+              }
+              return next;
+            });
           })
-          .map((r, i) => ({ ...r, globalIndex: i }));
-      });
-
-      await Promise.all(
-        enriched.map(async (r) => {
-          const key = toKey(r);
-          await set(ref(db, `excel_records/${key}`), {
-            ...r,
-            adminBranch: (defaultLocations.find(l => l.name === r.Location)?.name || r.Location),
-            VisitStatus: !!r.VisitStatus,
-            SoftCopy: !!r.SoftCopy,
-            Print: !!r.Print,
-          });
-        })
-      );
+        );
+      }
     },
     [yearPairForRecord, records, isRecordComplete, serverDate]
   );

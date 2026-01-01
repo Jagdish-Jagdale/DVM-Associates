@@ -244,27 +244,26 @@ const SuperAdmins = () => {
       if (existsInDB) {
         setSnack({
           open: true,
-          message: "A super admin with this mobile number already exists in database",
+          message: "A Super Admin account already exists for this mobile number.",
           type: "error",
         });
         setCreate((c) => ({ ...c, saving: false }));
         return;
       }
 
-      // Create in Firebase Auth if not exists
-      if (!existsInAuth) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        // If exists in Auth but not DB, we can proceed to add to DB, 
-        // but we can't set the password. We should warn or just accept it?
-        // Since we are "saving superadmin ... in also firebase auth", we fulfilled that if it exists.
-        // But maybe we should warn that password uses existing auth password?
-        // For simplicity, we assume if it exists in Auth, it's fine, we just create the DB record.
-        // But wait, if they exist in Auth, we don't know their password. 
-        // So if we save `password` to DB, it might mismatch Auth password.
-        // The request implies creating a NEW user.
-        // Let's assume we proceed.
+      // If user exists in Auth, preventing creation as per 'already exists in system' requirement
+      if (existsInAuth) {
+        setSnack({
+          open: true,
+          message: "A Super Admin account already exists for this mobile number.",
+          type: "error",
+        });
+        setCreate((c) => ({ ...c, saving: false }));
+        return;
       }
+
+      // Create in Firebase Auth
+      await createUserWithEmailAndPassword(auth, email, password);
 
       await set(adminRef, {
         name,
@@ -283,7 +282,7 @@ const SuperAdmins = () => {
       console.error(err);
       let msg = err.message;
       if (err.code === 'auth/email-already-in-use') {
-        msg = "Account already exists in Authentication.";
+        msg = "A Super Admin account already exists for this mobile number.";
         // In this case, we might still want to create the DB record if it was missing?
         // But we just caught the error, so valid flow halted.
         // Since we checked fetchSignInMethodsForEmail, this shouldn't happen often.
@@ -549,6 +548,7 @@ const SuperAdmins = () => {
                 </th>
               </tr>
             </thead>
+
             <tbody>
               {pageItems.length ? (
                 pageItems.map((a, i) => (

@@ -108,68 +108,99 @@ exports.autoReservedRow = onSchedule({
     }
 
     const db = admin.database();
-    const ref = db.ref("excel_records");
+
+    // 1. Calculate Banking Year (Apr-Mar)
+    // Use Server Time for year calculation
+    const currentMonthIndex = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    let startYear;
+    if (currentMonthIndex >= 3) {
+        startYear = currentYear;
+    } else {
+        startYear = currentYear - 1;
+    }
+
+    const y1 = startYear % 100;
+    const y2 = (startYear + 1) % 100;
+    const yearPair = `${y1}-${String(y2).padStart(2, '0')}`; // e.g., "25-26"
 
     try {
-        // 1. Get max RefNo
-        // Scanning all records can be expensive if large. 
-        // Ideally we should keep a counter, but for now standard scan as per user "calculate last ref no+1"
-        const snapshot = await ref.once("value");
-        let maxRef = 0;
-        snapshot.forEach(child => {
-            const val = child.val();
-            if (val && val.RefNo) {
-                // Should extract number if it's mixed string "Ref 123"
-                // Assuming it's numeric based on "calculate"
-                const num = parseInt(val.RefNo, 10);
-                if (!isNaN(num) && num > maxRef) maxRef = num;
+        // 2. Transactional Counter
+        // Use EXACT SAME counter path as createExcelRecord
+        const counterRef = db.ref(`metadata/counters/${yearPair}`);
+        let assignedRefNo = 0;
+
+        const result = await counterRef.transaction((current) => {
+            if (current === null) {
+                return -1; // Flag for lazy init
             }
+            return current + 1;
         });
 
-        const nextRef = Math.max(maxRef, 6500) + 1;
-        const nextRefStr = String(nextRef).padStart(3, '0');
+        if (result.committed) {
+            if (result.snapshot.val() === -1) {
+                // Initialize counter logic (Same as createExcelRecord)
+                const excelRef = db.ref("excel_records");
+                const snapshot = await excelRef.once("value");
+                let maxRef = 0;
 
-        // 2. Calculate Office No
-        // Format: DVM/RESERVED/(server current year short - server next year short)
-        // e.g. DVM/RESERVED/25-26
-        const d = new Date();
-        // Financial Year Logic (Apr 1 - Mar 31)
-        // If current month is April (3) or later, FY starts this year. 
-        // If Jan-Mar (0-2), FY started previous year.
-        const currentMonthIndex = d.getMonth();
-        const currentYear = d.getFullYear();
+                snapshot.forEach(child => {
+                    const val = child.val();
+                    let yp = null;
+                    const k = child.key;
+                    if (k.includes(`-${yearPair}-`) || k.includes(`-${yearPair}_`) || k.includes(`_${yearPair}-`)) {
+                        yp = yearPair;
+                    }
+                    else if (val.OfficeNo && String(val.OfficeNo).includes(`/${yearPair}`)) {
+                        yp = yearPair;
+                    }
 
-        let startYear, endYear;
-        if (currentMonthIndex >= 3) {
-            startYear = currentYear;
-            endYear = currentYear + 1;
+                    if (yp === yearPair && val.RefNo) {
+                        const n = parseInt(val.RefNo, 10);
+                        if (!isNaN(n) && n > maxRef) maxRef = n;
+                    }
+                });
+
+                const startVal = Math.max(maxRef, 6500) + 1;
+
+                const initResult = await counterRef.transaction((curr) => {
+                    if (curr !== null && curr !== -1) return curr + 1;
+                    return startVal;
+                });
+
+                if (initResult.committed) {
+                    assignedRefNo = initResult.snapshot.val();
+                } else {
+                    console.error("autoReservedRow failed to init counter");
+                    return;
+                }
+            } else {
+                assignedRefNo = result.snapshot.val();
+            }
         } else {
-            startYear = currentYear - 1;
-            endYear = currentYear;
+            console.error("autoReservedRow transaction failed");
+            return;
         }
 
-        const yShort = startYear % 100;
-        const nextY = endYear % 100;
-        const padNextY = String(nextY).padStart(2, '0');
-        const officeNo = `DVM/RESERVED/${yShort}-${padNextY}`;
-
+        const nextRefStr = String(assignedRefNo).padStart(3, '0');
+        const officeNo = `DVM/RESERVED/${yearPair}`;
+        const key = `DVM-RESERVED-${yearPair}-${nextRefStr}`;
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const currentMonth = monthNames[d.getMonth()];
+        const currentMonth = monthNames[now.getMonth()];
 
-        // 3. Add to DB
-        // Format: DVM-RESERVED-YY-YY-NNN
-        const key = `${officeNo.replace(/\//g, '-')}-${nextRefStr}`;
-
-        await ref.child(key).set({
+        // 3. Save Reserved Row
+        await db.ref(`excel_records/${key}`).set({
             RefNo: nextRefStr,
             OfficeNo: officeNo,
             committedRefNo: nextRefStr,
-            createdAt: new Date().toISOString(),
+            createdAt: now.toISOString(),
             ClientName: "",
             Month: currentMonth,
             isReserved: true,
+            createdByRole: "System",
 
-            // Initialize other fields to empty/default
+            // Defaults
             VisitDate: "",
             ReportDate: "",
             TechnicalExecutive: "",
@@ -190,44 +221,165 @@ exports.autoReservedRow = onSchedule({
             RecdDate: "",
             GSTNo: "",
             Remark: "",
-
             VisitStatus: "Pending",
             ReportStatus: "",
             BillStatus: ""
         });
 
-        console.log(`Auto-created Reserved Row with key ${key}: ${officeNo} Ref: ${nextRef}`);
+        console.log(`Auto-created Reserved Row with key ${key}: ${officeNo} Ref: ${nextRefStr}`);
     } catch (error) {
         console.error("Error in autoReservedRow:", error);
     }
 });
 
-exports.deleteUserAccount = onCall(async (request) => {
-    const { mobile } = request.data;
-    if (!mobile) {
-        throw new HttpsError("invalid-argument", "Mobile number is required.");
-    }
+exports.createExcelRecord = onCall(async (request) => {
+    // 1. Validation
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be authenticated.");
     }
+    const data = request.data;
+    if (!data.Location) {
+        throw new HttpsError("invalid-argument", "Location is required.");
+    }
+
+    const getLocationShort = (loc) => {
+        const map = {
+            "Belgaum": "BGM",
+            "Bengaluru": "BLR",
+            "Hyderabad": "HYD",
+            "Indore": "INDR",
+            "Kolhapur": "KOP",
+            "Mumbai": "MUM",
+            "Pune": "PUNE",
+            "PCMC": "PUNE",
+            "Sangli": "SNGL",
+            "Satara": "STR",
+            "Vijayapur": "VJP",
+            // Keep existing ones if needed, or remove if strictly limited to image
+            "Ch. Sambhajinagar": "SAM",
+            "Dharashiv": "DHA",
+            "Ahilyanagar": "AHI",
+            "Solapur": "SOL"
+        };
+        // Default to first 3 letters upper case if not found
+        return map[loc] || loc.substring(0, 3).toUpperCase();
+    };
 
     try {
-        const email = `${mobile}@admin.com`;
-        let targetUid;
-        try {
-            const user = await admin.auth().getUserByEmail(email);
-            targetUid = user.uid;
-        } catch (e) {
-            if (e.code === 'auth/user-not-found') {
-                return { success: true, message: "User not found in Auth, proceeding to DB delete." };
-            }
-            throw e;
+        const db = admin.database();
+
+        // 2. Banking Year Logic (Apr 1 - Mar 31)
+        const dateStr = data.createdAt || new Date().toISOString();
+        const dateObj = new Date(dateStr);
+        const month = dateObj.getMonth(); // 0 = Jan, 3 = April
+        const year = dateObj.getFullYear();
+
+        let startYear;
+        // If Jan(0), Feb(1), Mar(2) -> belongs to PREVIOUS financial start year
+        if (month < 3) {
+            startYear = year - 1;
+        } else {
+            startYear = year;
         }
 
-        await admin.auth().deleteUser(targetUid);
-        return { success: true, message: `User ${mobile} deleted from Auth.` };
-    } catch (error) {
-        console.error("Error deleting user:", error);
-        throw new HttpsError("internal", error.message);
+        const y1 = startYear % 100;
+        const y2 = (startYear + 1) % 100;
+        const yearPair = `${y1}-${String(y2).padStart(2, '0')}`; // e.g., "25-26"
+
+        // 3. Transactional Counter
+        const counterRef = db.ref(`metadata/counters/${yearPair}`);
+        let assignedRefNo = 0;
+
+        const result = await counterRef.transaction((current) => {
+            if (current === null) {
+                // Return non-null to abort and initialize outside
+                return -1;
+            }
+            return current + 1;
+        });
+
+        if (result.committed) {
+            if (result.snapshot.val() === -1) {
+                // Counter didn't exist, we aborted transaction. Proceed to initialize.
+                // Need to find max RefNo from existing records
+                const excelRef = db.ref("excel_records");
+                const snapshot = await excelRef.once("value");
+                let maxRef = 0;
+
+                // Scan logic (Robust)
+                snapshot.forEach(child => {
+                    const val = child.val();
+                    let yp = null;
+
+                    // Helper: check if record belongs to this YearPair
+                    // Check Key
+                    const k = child.key;
+                    if (k.includes(`-${yearPair}-`) || k.includes(`-${yearPair}_`) || k.includes(`_${yearPair}-`)) {
+                        yp = yearPair;
+                    }
+                    // Check OfficeNo
+                    else if (val.OfficeNo && String(val.OfficeNo).includes(`/${yearPair}`)) {
+                        yp = yearPair;
+                    }
+
+                    if (yp === yearPair && val.RefNo) {
+                        const n = parseInt(val.RefNo, 10);
+                        if (!isNaN(n) && n > maxRef) maxRef = n;
+                    }
+                });
+
+                // Initialize counter. Base is 6500.
+                const startVal = Math.max(maxRef, 6500) + 1;
+
+                // Now try to set it safely?
+                // We can just use transaction again to initialize if still null
+                const initResult = await counterRef.transaction((curr) => {
+                    // If someone else initialized it in between, just increment
+                    if (curr !== null && curr !== -1) return curr + 1;
+                    return startVal;
+                });
+
+                if (initResult.committed) {
+                    assignedRefNo = initResult.snapshot.val();
+                } else {
+                    throw new HttpsError("aborted", "Failed to initialize counter.");
+                }
+            } else {
+                assignedRefNo = result.snapshot.val();
+            }
+        } else {
+            throw new HttpsError("aborted", "Transaction failed.");
+        }
+
+        const refNoStr = String(assignedRefNo).padStart(3, '0');
+
+        // 4. Construct Data
+        // DVM-{LOC SHORT}-{YP}-{REFNO}
+        const locShort = getLocationShort(data.Location);
+        const officeNo = `DVM/${locShort}/${yearPair}`;
+        const key = `DVM-${locShort}-${yearPair}-${refNoStr}`;
+
+        const newRecord = {
+            ...data,
+            RefNo: refNoStr,
+            OfficeNo: officeNo,
+            createdAt: dateStr,
+            created_by: request.auth.token.phone_number || request.auth.uid, // Track creator
+            createdBy: request.auth.uid
+        };
+
+        // 5. Save to DB
+        await db.ref(`excel_records/${key}`).set(newRecord);
+
+        return {
+            success: true,
+            refNo: refNoStr,
+            key: key,
+            officeNo: officeNo
+        };
+
+    } catch (err) {
+        console.error("createExcelRecord error:", err);
+        throw new HttpsError("internal", err.message);
     }
 });

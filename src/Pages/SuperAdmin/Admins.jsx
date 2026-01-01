@@ -1003,12 +1003,21 @@ const Admins = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Branch
                 </label>
-                <input
+                <select
                   value={edit.branch}
-                  readOnly
-                  disabled
-                  className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed"
-                />
+                  onChange={(e) =>
+                    setEdit((prev) => ({ ...prev, branch: e.target.value }))
+                  }
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  required
+                >
+                  <option value="">Select branch</option>
+                  {branchOptions.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
