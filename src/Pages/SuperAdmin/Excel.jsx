@@ -686,6 +686,7 @@ const Excel = () => {
   const [sortBy, setSortBy] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [searchText, setSearchText] = useState("");
+  const [editingRows, setEditingRows] = useState(new Set());
   const tableRef = useRef(null);
   const [scrollMaxHeight, setScrollMaxHeight] = useState(0);
   const [serverOffset, setServerOffset] = useState(0);
@@ -1607,7 +1608,7 @@ const Excel = () => {
 
         setErrorSnack({
           open: true,
-          message: "An error occurred while saving. Please try again.",
+          message: `Error: ${error.message || "An error occurred while saving."}`,
         });
       } finally {
         setIsSaving(false);
