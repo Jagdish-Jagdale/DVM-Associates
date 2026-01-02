@@ -1032,13 +1032,20 @@ const Excel = () => {
           allowedSet.has(normalizeLocation(r.Location))
         );
         const sorted = filteredOut.sort((a, b) => {
+          // 1. Existing records (have RefNo) come FIRST
+          const hasRefA = !!a.RefNo;
+          const hasRefB = !!b.RefNo;
+          if (hasRefA !== hasRefB) return hasRefA ? -1 : 1;
+
+          // 2. If both have RefNo, sort ASC by RefNo (6597, 6598...)
+          if (hasRefA && hasRefB) {
+            return parseInt(a.RefNo, 10) - parseInt(b.RefNo, 10);
+          }
+
+          // 3. If neither have RefNo (Unsaved), sort by createdAt ASC (Oldest first -> Newest last)
           const ta = Date.parse(a.createdAt || "") || 0;
           const tb = Date.parse(b.createdAt || "") || 0;
-          if (tb !== ta) return tb - ta;
-          return (
-            a.Location.localeCompare(b.Location) ||
-            parseInt(a.RefNo || "0", 10) - parseInt(b.RefNo || "0", 10)
-          );
+          return ta - tb;
         });
         const mapped = sorted.map((r, i) => ({ ...r, globalIndex: i }));
         setRecords((prev) => {
@@ -1054,14 +1061,22 @@ const Excel = () => {
           );
           const merged = [...mapped, ...localUnsaved];
           const ordered = merged.sort((a, b) => {
-            if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
+            // 1. Separate Local (Unsaved) from Saved
+            const isLocalA = !!a.__local;
+            const isLocalB = !!b.__local;
+            if (isLocalA !== isLocalB) return isLocalA ? 1 : -1; // Local goes to bottom
+
+            // 2. If both are Saved, sort by RefNo ASC
+            if (!isLocalA) {
+              const refA = parseInt(a.RefNo || "0", 10);
+              const refB = parseInt(b.RefNo || "0", 10);
+              return refA - refB;
+            }
+
+            // 3. If both are Local (Unsaved), sort by createdAt ASC (Oldest first -> Newest last)
             const ta = Date.parse(a.createdAt || "") || 0;
             const tb = Date.parse(b.createdAt || "") || 0;
-            if (tb !== ta) return tb - ta;
-            return (
-              a.Location.localeCompare(b.Location) ||
-              parseInt(a.RefNo || "0", 10) - parseInt(b.RefNo || "0", 10)
-            );
+            return ta - tb;
           });
           return ordered.map((r, i) => ({ ...r, globalIndex: i }));
         });
@@ -1563,28 +1578,32 @@ const Excel = () => {
 
     // Sort logic: if date filter is active, sort by createdAt desc then RefNo desc
     // If no date filter, sort by RefNo desc
+    // Sort logic
     arr.sort((a, b) => {
-      if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
+      // 1. Separate Local (Unsaved) from Saved
+      const isLocalA = !!a.__local;
+      const isLocalB = !!b.__local;
+      if (isLocalA !== isLocalB) return isLocalA ? 1 : -1; // Local goes to bottom
 
-      if (dateFilter) {
-        // When date filter is active, sort by createdAt descending first
-        const ta = Date.parse(a.createdAt || "") || 0;
-        const tb = Date.parse(b.createdAt || "") || 0;
-        if (tb !== ta) return tb - ta;
-        return (
-          a.Location.localeCompare(b.Location) ||
-          parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
-        );
-      } else {
-        // When no date filter, sort by RefNo descending only
-        const refA = parseInt(a.RefNo || "0", 10);
-        const refB = parseInt(b.RefNo || "0", 10);
-        if (refB !== refA) return refB - refA;
-        const ta = Date.parse(a.createdAt || "") || 0;
-        const tb = Date.parse(b.createdAt || "") || 0;
-        if (tb !== ta) return tb - ta;
-        return a.Location.localeCompare(b.Location);
+      // if (dateFilter) { ... }  <-- Removed overrides to enforce global sort behavior
+
+
+      // Default Sort: RefNo ASC
+      if (!isLocalA) {
+        // Safe Extract Number from RefNo to handle "6597" or "001" robustly
+        const getNum = (str) => {
+          const m = String(str || "").match(/(\d+)/);
+          return m ? parseInt(m[1], 10) : 0;
+        };
+        const refA = getNum(a.RefNo);
+        const refB = getNum(b.RefNo);
+        return refA - refB;
       }
+
+      // Local Records: CreatedAt ASC (New goes to bottom)
+      const ta = Date.parse(a.createdAt || "") || 0;
+      const tb = Date.parse(b.createdAt || "") || 0;
+      return ta - tb;
     });
     return arr;
   }, [

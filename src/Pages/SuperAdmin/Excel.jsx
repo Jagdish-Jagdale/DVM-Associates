@@ -1108,13 +1108,24 @@ const Excel = () => {
           allowedSet.has(normalizeLocation(r.Location)) || r.isReserved
         );
         const sorted = filteredOut.sort((a, b) => {
+          // 1. Existing records (have RefNo) come FIRST
+          const hasRefA = !!a.RefNo;
+          const hasRefB = !!b.RefNo;
+          if (hasRefA !== hasRefB) return hasRefA ? -1 : 1;
+
+          // 2. If both have RefNo, sort ASC by RefNo
+          if (hasRefA && hasRefB) {
+            const getNum = (str) => {
+              const m = String(str || "").match(/(\d+)/);
+              return m ? parseInt(m[1], 10) : 0;
+            };
+            return getNum(a.RefNo) - getNum(b.RefNo);
+          }
+
+          // 3. If neither have RefNo, sort by createdAt ASC
           const ta = Date.parse(a.createdAt || "") || 0;
           const tb = Date.parse(b.createdAt || "") || 0;
-          if (tb !== ta) return tb - ta;
-          return (
-            a.Location.localeCompare(b.Location) ||
-            parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
-          );
+          return ta - tb;
         });
         const mapped = sorted.map((r, i) => ({ ...r, globalIndex: i }));
         setRecords((prev) => {
@@ -1130,14 +1141,22 @@ const Excel = () => {
           );
           const merged = [...mapped, ...localUnsaved];
           const ordered = merged.sort((a, b) => {
-            if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
+            // 1. Separate Local (Unsaved) from Saved
+            const isLocalA = !!a.__local;
+            const isLocalB = !!b.__local;
+            if (isLocalA !== isLocalB) return isLocalA ? 1 : -1; // Local goes to bottom
+
+            // 2. If both are Saved, sort by RefNo ASC
+            if (!isLocalA) {
+              const refA = parseInt(a.RefNo || "0", 10);
+              const refB = parseInt(b.RefNo || "0", 10);
+              return refA - refB;
+            }
+
+            // 3. If both are Local (Unsaved), sort by createdAt ASC (Oldest first -> Newest last)
             const ta = Date.parse(a.createdAt || "") || 0;
             const tb = Date.parse(b.createdAt || "") || 0;
-            if (tb !== ta) return tb - ta;
-            return (
-              a.Location.localeCompare(b.Location) ||
-              parseInt(b.RefNo || "0", 10) - parseInt(a.RefNo || "0", 10)
-            );
+            return ta - tb;
           });
           return ordered.map((r, i) => ({ ...r, globalIndex: i }));
         });
@@ -1727,16 +1746,29 @@ const Excel = () => {
         (r) => String(r.BillStatus || "").toLowerCase() === target
       );
     }
-    // Sort by RefNo descending, then by createdAt descending for same RefNo
+    // Sort by RefNo ASC
     arr.sort((a, b) => {
-      if (!!a.__local !== !!b.__local) return a.__local ? 1 : -1;
-      const refA = parseInt(a.RefNo || "0", 10);
-      const refB = parseInt(b.RefNo || "0", 10);
-      if (refB !== refA) return refB - refA;
+      // 1. Separate Local (Unsaved) from Saved
+      const isLocalA = !!a.__local;
+      const isLocalB = !!b.__local;
+      if (isLocalA !== isLocalB) return isLocalA ? 1 : -1; // Local goes to bottom
+
+      // Default Sort: RefNo ASC
+      if (!isLocalA) {
+        // Safe Extract Number from RefNo
+        const getNum = (str) => {
+          const m = String(str || "").match(/(\d+)/);
+          return m ? parseInt(m[1], 10) : 0;
+        };
+        const refA = getNum(a.RefNo);
+        const refB = getNum(b.RefNo);
+        return refA - refB;
+      }
+
+      // Local Records: CreatedAt ASC (New goes to bottom)
       const ta = Date.parse(a.createdAt || "") || 0;
       const tb = Date.parse(b.createdAt || "") || 0;
-      if (tb !== ta) return tb - ta;
-      return a.Location.localeCompare(b.Location);
+      return ta - tb;
     });
     return arr;
   }, [

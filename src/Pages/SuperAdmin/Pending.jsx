@@ -525,13 +525,15 @@ const Pending = () => {
           allowedSet.has(normalizeLocation(r.Location))
         );
         const sorted = filtered.sort((a, b) => {
+          // Sort by RefNo ASC (1, 2, 3...)
+          const refA = parseInt(a.RefNo || "0", 10);
+          const refB = parseInt(b.RefNo || "0", 10);
+          if (refA !== refB) return refA - refB;
+
+          // Fallback to createdAt ASC
           const ta = Date.parse(a.createdAt || "") || 0;
           const tb = Date.parse(b.createdAt || "") || 0;
-          if (tb !== ta) return tb - ta;
-          return (
-            a.Location.localeCompare(b.Location) ||
-            parseInt(a.RefNo || "0", 10) - parseInt(b.RefNo || "0", 10)
-          );
+          return ta - tb;
         });
         setAllRecords(sorted);
         setIsLoading(false);
@@ -579,15 +581,29 @@ const Pending = () => {
         return refDisp.includes(q) || client.includes(q) || gst.includes(q);
       });
     }
-    // Sort by RefNo descending, then by createdAt descending
+    // Sort by RefNo ASCending, then by createdAt ASCending
+    // Sort by RefNo ASC ending, then by createdAt ASC
     arr = arr.sort((a, b) => {
-      const refA = parseInt(a.RefNo || "0", 10);
-      const refB = parseInt(b.RefNo || "0", 10);
-      if (refB !== refA) return refB - refA;
+      // Safe Extract Number from RefNo
+      const getNum = (str) => {
+        if (!str) return 0;
+        const m = String(str).match(/(\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+      };
+
+      const refA = getNum(a.RefNo);
+      const refB = getNum(b.RefNo);
+
+      // PUSH 0 (Empty RefNo) TO BOTTOM
+      if (refA === 0 && refB !== 0) return 1;
+      if (refA !== 0 && refB === 0) return -1;
+
+      if (refA !== refB) return refA - refB; // ASC
+
+      // Fallback for same RefNo (or both 0): CreatedAt ASC
       const ta = Date.parse(a.createdAt || "") || 0;
       const tb = Date.parse(b.createdAt || "") || 0;
-      if (tb !== ta) return tb - ta;
-      return a.Location.localeCompare(b.Location);
+      return ta - tb;
     });
     return arr.map((record, index) => ({ ...record, globalIndex: index }));
   }, [allRecords, selectedBranch, dateFilter, searchText]);
