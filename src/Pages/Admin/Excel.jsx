@@ -1090,100 +1090,41 @@ const Excel = () => {
     return nextVal.toString().padStart(3, "0");
   }, [yearPair]);
 
-  const getNextRefNoForYP = useCallback(
-    async (yp) => {
-      console.log("=== getNextRefNoForYP called with yp:", yp);
-      const snap = await get(ref(db, "excel_records"));
-      const data = snap.val() || {};
-      console.log("Database records count:", Object.keys(data).length);
-      let maxN = 0;
 
-      // Extract year parts for flexible matching
-      const [y1, y2] = yp.split("-");
-      const fullYear = `${2000 + parseInt(y1)}-${y2}`;
-      console.log("Searching for year patterns:", yp, "or", fullYear);
+  // const getNextRefNoForYP = useCallback(
+  //   async (yp) => {
+  //     // Logic removed to prevent client-side duplicates
+  //     return "000"; 
+  //   },
+  //   [records, yearPairForRecord, reservedRow, dateFilter]
+  // );
 
-      Object.entries(data).forEach(([k, v]) => {
-        // Check if this record belongs to the current year pair
-        let belongs = false;
 
-        // Check OfficeNo field (most reliable)
-        if (v?.OfficeNo) {
-          const office = String(v.OfficeNo);
-          if (office.includes(`/${yp}`) || office.includes(`/${fullYear}`)) {
-            belongs = true;
-          }
-        }
 
-        // Check key itself as fallback
-        if (!belongs) {
-          if (k.includes(`-${yp}-`) || k.includes(`-${yp}_`) ||
-            k.includes(`_${yp}-`) || k.includes(`_${yp}_`) ||
-            k.includes(`-${fullYear}-`) || k.includes(`-${fullYear}_`) ||
-            k.includes(`_${fullYear}-`) || k.includes(`_${fullYear}_`)) {
-            belongs = true;
-          }
-        }
+  // const assignRefNoImmediate = useCallback(
+  //   async (gi, yp) => {
+  //     try {
+  //       const nextNo = await getNextRefNoForYP(yp);
+  //       setRecords((prev) => {
+  //         if (gi < 0 || gi >= prev.length) return prev;
+  //         const next = [...prev];
+  //         const rec = next[gi];
+  //         if (
+  //           isRecordComplete(rec) &&
+  //           !rec.RefNo &&
+  //           yearPairForRecord(rec) === yp
+  //         ) {
+  //           next[gi] = { ...rec, RefNo: nextNo };
+  //         }
+  //         return next;
+  //       });
+  //     } catch (e) {
+  //       console.error("assignRefNoImmediate failed", e);
+  //     }
+  //   },
+  //   [getNextRefNoForYP, isRecordComplete, yearPairForRecord]
+  // );
 
-        if (belongs && v?.RefNo) {
-          const n = parseInt(v.RefNo, 10);
-          if (!isNaN(n) && n > maxN) {
-            maxN = n;
-          }
-        }
-      });
-
-      // Also check local records in state
-      records.forEach((r) => {
-        const y = yearPairForRecord(r);
-        if (y === yp && r.RefNo) {
-          const n = parseInt(r.RefNo, 10);
-          if (!isNaN(n) && n > maxN) {
-            maxN = n;
-          }
-        }
-      });
-
-      // Check reserved row in state
-      const reservedYP = dateFilter ? yearPairFromDate(dateFilter) : "";
-      if (reservedRow?.committedRefNo && reservedYP === yp) {
-        const n = parseInt(reservedRow.committedRefNo, 10);
-        if (!isNaN(n) && n > maxN) {
-          maxN = n;
-        }
-      }
-
-      const nextRefNo = (Math.max(maxN, 6500) + 1).toString().padStart(3, "0");
-      console.log("=== Final result: maxN =", maxN, ", returning:", nextRefNo);
-      return nextRefNo;
-    },
-    [records, yearPairForRecord, reservedRow, dateFilter]
-  );
-
-  const assignRefNoImmediate = useCallback(
-    async (gi, yp) => {
-      try {
-        const nextNo = await getNextRefNoForYP(yp);
-        setRecords((prev) => {
-          if (gi < 0 || gi >= prev.length) return prev;
-          const next = [...prev];
-          const rec = next[gi];
-          // re-validate row is still complete and RefNo empty and YP unchanged
-          if (
-            isRecordComplete(rec) &&
-            !rec.RefNo &&
-            yearPairForRecord(rec) === yp
-          ) {
-            next[gi] = { ...rec, RefNo: nextNo };
-          }
-          return next;
-        });
-      } catch (e) {
-        console.error("assignRefNoImmediate failed", e);
-      }
-    },
-    [getNextRefNoForYP, isRecordComplete, yearPairForRecord]
-  );
 
   const handleDeleteByOffice = useCallback((officeNo, sr) => {
     if (!officeNo) return;
@@ -1247,10 +1188,12 @@ const Excel = () => {
         validationUpdate = { gi, fields: Array.from(miss) };
 
         // If row has become complete and has no RefNo, schedule assignment
-        if (isRecordComplete(rec) && !rec.RefNo) {
-          const yp = yearPairForRecord(rec);
-          assignInfo = { gi, yp };
-        }
+
+        // if (isRecordComplete(rec) && !rec.RefNo) {
+        //   const yp = yearPairForRecord(rec);
+        //   assignInfo = { gi, yp };
+        // }
+
 
         return next;
       });
@@ -1267,12 +1210,14 @@ const Excel = () => {
         });
       }
 
-      if (assignInfo) {
-        assignRefNoImmediate(assignInfo.gi, assignInfo.yp);
-      }
+
+      // Removed assignRefNoImmediate call to prevent local RefNo generation duplicates
+      // if (assignInfo) {
+      //   assignRefNoImmediate(assignInfo.gi, assignInfo.yp);
+      // }
+
     },
     [
-      assignRefNoImmediate,
       isRecordComplete,
       yearPairForRecord,
       getMissingFields,
@@ -1280,6 +1225,7 @@ const Excel = () => {
       recomputeTotals,
       shortOf,
     ]
+
   );
 
   const handleAddRecord = useCallback(
