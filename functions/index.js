@@ -247,7 +247,7 @@ exports.createExcelRecord = onCall(async (request) => {
             "Pune": "PUNE",
             "Sangli": "SNGL",
             "Satara": "STR",
-            "Vijayapur": "VJP",
+            "Vijyapur": "VJP",
             // Keep existing ones if needed, or remove if strictly limited to image
             "Ch. Sambhajinagar": "SAM",
             "Dharashiv": "DHA",

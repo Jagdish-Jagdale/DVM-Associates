@@ -36,7 +36,7 @@ const defaultLocations = [
   { name: "Hyderabad", shortForm: "HYD", aliases: ["HYD"] },
   { name: "Indore", shortForm: "INDR", aliases: ["IND", "INDR"] },
   { name: "Satara", shortForm: "STR", aliases: ["SAT", "STR"] },
-  { name: "Vijayapur", shortForm: "VJP", aliases: ["VJP"] },
+  { name: "Vijyapur", shortForm: "VJP", aliases: ["VJP"] },
 ];
 
 const getYearPair = (d = new Date()) => {

@@ -90,6 +90,7 @@ const locShortMap = {
   Hyderabad: "HYD",
   Indore: "INDR",
   Satara: "STR",
+  Vijyapur: "VJP",
 };
 const shortOf = (loc) => locShortMap[loc] || "SNGL";
 const getYearPair = (d = new Date()) => {
@@ -303,6 +304,7 @@ const Pending = () => {
     { name: "Hyderabad" },
     { name: "Indore" },
     { name: "Satara" },
+    { name: "Vijyapur" },
   ];
 
   const normalizeLocation = (name) => {
